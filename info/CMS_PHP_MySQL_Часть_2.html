@@ -1,0 +1,1624 @@
+﻿<!DOCTYPE html>
+<html xmlns="//www.w3.org/1999/xhtml">
+<head>
+	<title>CMS на PHP и MySQL. Часть 2</title>
+	
+</head>
+
+<body>
+<div id="body">
+    <div id="lessons">
+              
+       
+                
+          
+        <h1 style="margin-top: 40px;">CMS на PHP и MySQL. Часть 2 </h1>
+        <p>В предыдущих уроках серии мы построили простую CMS, которая имеет       клиентскую и серверную части и позволяет осуществлять примитивное       управление содержанием сайта без редактирования кода. Теперь       расширим функционал нашего проекта. Добавим использование       категорий.&nbsp;</p>
+<p>Категории добавляют гибкости сайту - кроме перечисления всех       статей в списке можно создавать отдельные страницы для категории,       на которых будут выводиться только статьи, объединенные по       какому-либо признаку.</p>
+<p>Например, наша CMS выводит все типы статей вместе на главной и в       архиве. Создав различные категории для новостей, обзоров и       интервью можно будет использовать разные страницы для       соответствующих разделов на нашем сайте, что существенно улучшит       уровень удобства пользования ресурсом.</p>
+<h2>План действий</h2>
+<p>Возьмем за исходную точку нашу готовую CMS и будем модифицировать       ее для добавления функционала категорий. Нужно сделать следующие       шаги:</p>
+<ol>
+<li>Модифицировать базу данных</li>
+<li>Построить класс <code>Category</code></li>
+<li>Модифицировать класс <code>Article</code> для управления         категориями</li>
+<li>Модифицировать <code>index.php</code> для вывода категорий</li>
+<li>Модифицировать <code>admin.php</code> для перечисления,         добавления, редактирования, удаления и назначения категорий</li>
+<li>Модифицировать шаблоны клиентской части и таблицы стилей для         вывода категорий</li>
+<li>Модифицировать шаблоны серверной части управления         перечислениями, добавлением, редактированием, удалением и         назначением категорий.</li>
+</ol>
+<p>&nbsp;</p>
+<h2>Модифицируем базу данных</h2>
+<p>Сначала нужно расширить возможности базы данных MySQL для       поддержки категорий. Нужно создать новую таблицу <code>categories</code> и модифицировать таблицу <code>articles</code> для включения ID       категории, которая связана с каждой статьей.</p>
+<p>Открываем файл <code class="filename">tables.sql</code> оригинальной CMS и вносим изменения:</p>
+<div class="code_sample">
+<pre class="brush:sql">DROP TABLE IF EXISTS categories;
+CREATE TABLE categories
+(
+  id              smallint unsigned NOT NULL auto_increment,
+  name            varchar(255) NOT NULL,                      # Название категории
+  description     text NOT NULL,                              # Короткое описание категории
+ 
+  PRIMARY KEY     (id)
+);
+ 
+DROP TABLE IF EXISTS articles;
+CREATE TABLE articles
+(
+  id              smallint unsigned NOT NULL auto_increment,
+  publicationDate date NOT NULL,                              # Дата публикации категории
+  categoryId      smallint unsigned NOT NULL,                 # Идентификатор категории статьи
+  title           varchar(255) NOT NULL,                      # Полное название статьи
+  summary         text NOT NULL,                              # Короткое резюме
+  content         mediumtext NOT NULL,                        # Содержание HTML статьи
+ 
+  PRIMARY KEY     (id)
+);
+</pre>
+</div>
+<p>Мы добавили новую таблицу <code>categories</code> для хранения       категорий. Каждая категория имеет уникальное поле для       идентификации (<code>id</code>), название категории (<code>name</code>)       и краткое описание для вывода на архивной странице (<code>description</code>).</p>
+<p>Также мы изменяем таблицу <code>articles</code> для добавления       поля <code>categoryId</code>, которое используется для связывания       каждой статьи с соответствующей категорией.</p>
+<p>Поле, которое связывает одну таблицу с другой называется как <em>внешний         ключ</em><dfn> (</dfn><dfn>foreign key)</dfn>.</p>
+<p>&nbsp;</p>
+<h3>А что делать, если у вас уже есть статьи в базе данных?</h3>
+<p>Если использовать запрос из файла <code class="filename">tables.sql</code> в MySQL, то он удалит существующую таблицу<code> articles</code> в       вашей базе <code>cms</code> и построит ее с нуля. То есть все       статьи, которые уже есть в CMS удалятся.</p>
+<p>В подобной ситуации нужно модифицировать таблицу&nbsp;<code>articles</code> с сохранением всех данных. MySQL позволяет выполнять такие задачи       легко, благодаря выражению <code>ALTER TABLE</code>. Упрощенно       синтаксис <code>ALTER TABLE</code> выглядит так:</p>
+<p><kbd>ALTER TABLE имя_таблицы ADD имя_нового_поля<var></var> <var>определение_нового_поля</var> AFTER существующее_поле<var></var></kbd></p>
+<p>Если у вас есть статьи в CMS, то нужно создать новую таблицу <code>categories</code> и <em>модифицировать</em> имеющуюся таблицу <code>articles</code>.       Чтобы выполнить задачу, запрос в файле <code class="filename">tables.sql</code> должен выглядеть так:</p>
+<div class="code_sample">
+<pre class="brush:sql">DROP TABLE IF EXISTS categories;
+CREATE TABLE categories
+(
+  id              smallint unsigned NOT NULL auto_increment,
+  name            varchar(255) NOT NULL,                      # Name of the category
+  description     text NOT NULL,                              # A short description of the category
+ 
+  PRIMARY KEY     (id)
+);
+ 
+ALTER TABLE articles ADD categoryId smallint unsigned NOT NULL AFTER publicationDate;
+</pre>
+</div>
+<p>&nbsp;</p>
+<h2>Применяем изменения</h2>
+<p>Теперь нужно применить изменения к нашей базе MySQL.</p>
+<p>Если у вас уже есть база данных <code>cms</code>, которая       содержит статьи, то необходимо сделать резервную копию перед внесением изменений!</p>
+
+<p>Теперь можно загрузить файл <code class="filename">tables.sql</code> в MySQL для внесения изменений в таблицу данных:</p>
+<div class="code_sample">
+<pre class="brush:php">mysql -u username -p cms &lt; tables.sql 
+</pre>
+</div>
+<p>Вводим пароль, когда система его запросит и нажимаем <kbd>Enter</kbd>.       MySQL читает файл <code class="filename">tables.sql</code> и выполняет команды из него, создавая и/или модифицируя таблицу в       базе данных <code>cms.</code></p>
+<p>Для проверки результатов нужно войти в MySQL:</p>
+<div class="code_sample">
+<pre class="brush:php">mysql -u username -p cms
+</pre>
+</div>
+<p>Затем используем команды <code>SHOW TABLES</code> и <code>EXPLAIN</code> для проверки схем таблиц в MySQL:</p>
+<div class="code_sample">
+<pre class="brush:php">mysql&gt; show tables;
++---------------+
+| Tables_in_cms |
++---------------+
+| articles      |
+| categories    |
++---------------+
+2 rows in set (0.00 sec)
+
+mysql&gt; explain articles;
++-----------------+----------------------+------+-----+---------+----------------+
+| Field           | Type                 | Null | Key | Default | Extra          |
++-----------------+----------------------+------+-----+---------+----------------+
+| id              | smallint(5) unsigned | NO   | PRI | NULL    | auto_increment |
+| publicationDate | date                 | NO   |     | NULL    |                |
+| categoryId      | smallint(5) unsigned | NO   |     | NULL    |                |
+| title           | varchar(255)         | NO   |     | NULL    |                |
+| summary         | text                 | NO   |     | NULL    |                |
+| content         | mediumtext           | NO   |     | NULL    |                |
++-----------------+----------------------+------+-----+---------+----------------+
+6 rows in set (0.00 sec)
+
+mysql&gt; explain categories;
++-------------+----------------------+------+-----+---------+----------------+
+| Field       | Type                 | Null | Key | Default | Extra          |
++-------------+----------------------+------+-----+---------+----------------+
+| id          | smallint(5) unsigned | NO   | PRI | NULL    | auto_increment |
+| name        | varchar(255)         | NO   |     | NULL    |                |
+| description | text                 | NO   |     | NULL    |                |
++-------------+----------------------+------+-----+---------+----------------+
+3 rows in set (0.00 sec)
+
+mysql&gt; 
+</pre>
+</div>
+<p>Обратите внимание на новое поле <code>categoryId</code> в       таблице <code>articles</code> и новую таблицу&nbsp; <code>categories</code>.</p>
+<p>Теперь база данных нашей CMS для работы с категориями.</p>
+
+      	
+    </div>           
+</div>    
+
+    
+
+
+<h2>Создание класса <code>Category</code></h2>
+<p>Также как ранее мы  создавали класс <code>Article</code> для управления       хранением и выводом статей, нам нужно построить класс <code>Category</code> для решения таких же задач с категориями.</p>
+<p>В папке <code>cms</code> имеется каталог <code>classes</code>. В каталоге <code>classes</code> создаем новый файл <code>Category.php</code> и копируем в него следующий       код:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ 
+/**
+ * Класс для обработки категорий статей
+ */
+ 
+class Category
+{
+  // Свойства
+ 
+  /**
+  * @var int ID категории из базы данных
+  */
+  public $id = null;
+ 
+  /**
+  * @var string Название категории
+  */
+  public $name = null;
+ 
+  /**
+  * @var string Короткое описание категории
+  */
+  public $description = null;
+ 
+ 
+  /**
+  * Устанавливаем свойства объекта с использованием значений в передаваемом массиве
+  *
+  * @param assoc Значения свойств
+  */
+ 
+  public function __construct( $data=array() ) {
+    if ( isset( $data['id'] ) ) $this-&gt;id = (int) $data['id'];
+    if ( isset( $data['name'] ) ) $this-&gt;name = preg_replace ( "/[^\.\,\-\_\'\"\@\?\!\:\$ a-zA-Z0-9()]/", "", $data['name'] );
+    if ( isset( $data['description'] ) ) $this-&gt;description = preg_replace ( "/[^\.\,\-\_\'\"\@\?\!\:\$ a-zA-Z0-9()]/", "", $data['description'] );
+  }
+ 
+ 
+  /**
+  * Устанавливаем свойства объекта с использованием значений из формы редактирования
+  *
+  * @param assoc Значения из формы редактирования
+  */
+ 
+  public function storeFormValues ( $params ) {
+ 
+    // Store all the parameters
+    $this-&gt;__construct( $params );
+  }
+ 
+ 
+  /**
+  * Возвращаем объект Category, соответствующий заданному ID
+  *
+  * @param int ID категории
+  * @return Category|false Объект Category object или false, если запись не была найдена или в случае другой ошибки
+  */
+ 
+  public static function getById( $id ) {
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "SELECT * FROM categories WHERE id = :id";
+    $st = $conn-&gt;prepare( $sql );
+    $st-&gt;bindValue( ":id", $id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $row = $st-&gt;fetch();
+    $conn = null;
+    if ( $row ) return new Category( $row );
+  }
+ 
+ 
+  /**
+  * Возвращаем все (или диапазон) объектов Category из базы данных
+  *
+  * @param int Optional Количество возвращаемых строк (по умолчаниюt = all)
+  * @param string Optional Столбец, по которому сортируются категории(по умолчанию = "name ASC")
+  * @return Array|false Двух элементный массив: results =&gt; массив с объектами Category; totalRows =&gt; общее количество категорий
+  */
+ 
+  public static function getList( $numRows=1000000, $order="name ASC" ) {
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM categories
+            ORDER BY " . mysql_escape_string($order) . " LIMIT :numRows";
+ 
+    $st = $conn-&gt;prepare( $sql );
+    $st-&gt;bindValue( ":numRows", $numRows, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $list = array();
+ 
+    while ( $row = $st-&gt;fetch() ) {
+      $category = new Category( $row );
+      $list[] = $category;
+    }
+ 
+    // Получаем общее количество категорий, которые соответствуют критериям
+    $sql = "SELECT FOUND_ROWS() AS totalRows";
+    $totalRows = $conn-&gt;query( $sql )-&gt;fetch();
+    $conn = null;
+    return ( array ( "results" =&gt; $list, "totalRows" =&gt; $totalRows[0] ) );
+  }
+ 
+ 
+  /**
+  * Вставляем текущий объект Category в базу данных и устанавливаем его свойство ID.
+  */
+ 
+  public function insert() {
+ 
+    // У объекта Category уже есть ID?
+    if ( !is_null( $this-&gt;id ) ) trigger_error ( "Category::insert(): Attempt to insert a Category object that already has its ID property set (to $this-&gt;id).", E_USER_ERROR );
+ 
+    // Вставляем категорию
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "INSERT INTO categories ( name, description ) VALUES ( :name, :description )";
+    $st = $conn-&gt;prepare ( $sql );
+    $st-&gt;bindValue( ":name", $this-&gt;name, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":description", $this-&gt;description, PDO::PARAM_STR );
+    $st-&gt;execute();
+    $this-&gt;id = $conn-&gt;lastInsertId();
+    $conn = null;
+  }
+ 
+ 
+  /**
+  * Обновляем текущий объект Category в базе данных.
+  */
+ 
+  public function update() {
+ 
+    // У объекта Category  есть ID?
+    if ( is_null( $this-&gt;id ) ) trigger_error ( "Category::update(): Attempt to update a Category object that does not have its ID property set.", E_USER_ERROR );
+    
+    // Обновляем категорию
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "UPDATE categories SET name=:name, description=:description WHERE id = :id";
+    $st = $conn-&gt;prepare ( $sql );
+    $st-&gt;bindValue( ":name", $this-&gt;name, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":description", $this-&gt;description, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":id", $this-&gt;id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $conn = null;
+  }
+ 
+ 
+  /**
+  * Удаляем текущий объект Category из базы данных.
+  */
+ 
+  public function delete() {
+ 
+    // У объекта Category  есть ID?
+    if ( is_null( $this-&gt;id ) ) trigger_error ( "Category::delete(): Attempt to delete a Category object that does not have its ID property set.", E_USER_ERROR );
+ 
+    // Удаляем категорию
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $st = $conn-&gt;prepare ( "DELETE FROM categories WHERE id = :id LIMIT 1" );
+    $st-&gt;bindValue( ":id", $this-&gt;id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $conn = null;
+  }
+ 
+}
+ 
+?&gt;
+</pre>
+</div>
+<p>Данный класс очень похож на класс         <code>Article</code> и немного проще. Он содержит три       свойства, которые соответствуют полям в таблице <code>categories</code> &mdash; <code>id</code>, <code>name</code> и <code>description,</code> конструктор <code>__construct()</code>, который&nbsp; создает       новый объект <code>Category</code>. Также класс имеет метод <code>storeFormValues()</code> для сохранения данных из формы редактирования, методы для       получения одной категории по ID и списка категорий, а также       методов для вставки, обновления и удаления категории в базе       данных.</p>
+<p>Нам нужно включить новый класс <code>Category</code> в наши       файлы кода, чтобы CMS могла получить доступ к нему. Поэтому       включаем файл с классом в файл <code>config.php</code>в       папке <code>cms</code>, также как мы включали <code>Article.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ini_set( "display_errors", true );
+date_default_timezone_set( "Australia/Sydney" );  // http://www.php.net/manual/en/timezones.php
+define( "DB_DSN", "mysql:host=localhost;dbname=cms" );
+define( "DB_USERNAME", "username" );
+define( "DB_PASSWORD", "password" );
+define( "CLASS_PATH", "classes" );
+define( "TEMPLATE_PATH", "templates" );
+define( "HOMEPAGE_NUM_ARTICLES", 5 );
+define( "ADMIN_USERNAME", "admin" );
+define( "ADMIN_PASSWORD", "mypass" );
+require( CLASS_PATH . "/Article.php" );
+require( CLASS_PATH . "/Category.php" );
+ 
+function handleException( $exception ) {
+  echo "Sorry, a problem occurred. Please try later.";
+  error_log( $exception-&gt;getMessage() );
+}
+ 
+set_exception_handler( 'handleException' );
+?&gt;
+</pre>
+</div>
+<p>&nbsp;</p>
+<h2>Модифицируем <code>Article</code></h2>
+<p>Кроме создания&nbsp; нового класса <code>Category</code> нужно       также модифицировать класс&nbsp; <code>Article</code> для работы       с категориями. Ниже приводится код файла <code>Article.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ 
+/**
+ * Класс для управления статьями
+ */
+ 
+class Article
+{
+  // Свойства
+ 
+  /**
+  * @var int ID статьи из базы данных
+  */
+  public $id = null;
+ 
+  /**
+  * @var int Дата публикации статьи
+  */
+  public $publicationDate = null;
+ 
+  /**
+  * @var int ID категории статьи
+  */
+  public $categoryId = null;
+ 
+  /**
+  * @var string Полное название статьи
+  */
+  public $title = null;
+ 
+  /**
+  * @var string Резюме статьи
+  */
+  public $summary = null;
+ 
+  /**
+  * @var string Содержание HTML статьи
+  */
+  public $content = null;
+ 
+ 
+  /**
+  * Устанавливаем свойства объекта с использованием значений из массива
+  *
+  * @param assoc Значения свойств
+  */
+ 
+  public function __construct( $data=array() ) {
+    if ( isset( $data['id'] ) ) $this-&gt;id = (int) $data['id'];
+    if ( isset( $data['publicationDate'] ) ) $this-&gt;publicationDate = (int) $data['publicationDate'];
+    if ( isset( $data['categoryId'] ) ) $this-&gt;categoryId = (int) $data['categoryId'];
+    if ( isset( $data['title'] ) ) $this-&gt;title = preg_replace ( "/[^\.\,\-\_\'\"\@\?\!\:\$ a-zA-Z0-9()]/", "", $data['title'] );
+    if ( isset( $data['summary'] ) ) $this-&gt;summary = preg_replace ( "/[^\.\,\-\_\'\"\@\?\!\:\$ a-zA-Z0-9()]/", "", $data['summary'] );
+    if ( isset( $data['content'] ) ) $this-&gt;content = $data['content'];
+  }
+ 
+ 
+  /**
+  * Устанавливаем свойства объекта с использованием значений из формы
+  *
+  * @param assoc Значения из формы
+  */
+ 
+  public function storeFormValues ( $params ) {
+ 
+    // Сохраняем все параметры
+    $this-&gt;__construct( $params );
+ 
+    // Разбираем и сохраняем дату публикации
+    if ( isset($params['publicationDate']) ) {
+      $publicationDate = explode ( '-', $params['publicationDate'] );
+ 
+      if ( count($publicationDate) == 3 ) {
+        list ( $y, $m, $d ) = $publicationDate;
+        $this-&gt;publicationDate = mktime ( 0, 0, 0, $m, $d, $y );
+      }
+    }
+  }
+ 
+ 
+  /**
+  * Возвращаем объект Article соответствующий заданному ID
+  *
+  * @param int ID статьи
+  * @return Article|false Объект Article или false, если запись не найдена или в случае другой ошибки
+  */
+ 
+  public static function getById( $id ) {
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) AS publicationDate FROM articles WHERE id = :id";
+    $st = $conn-&gt;prepare( $sql );
+    $st-&gt;bindValue( ":id", $id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $row = $st-&gt;fetch();
+    $conn = null;
+    if ( $row ) return new Article( $row );
+  }
+ 
+ 
+  /**
+  * Возвращает все (или диапазон) объекты Article из базы данных
+  *
+  * @param int Optional Количество возвращаемых строк (по умолчанию = all)
+  * @param int Optional Вернуть статьи только из категории с указанным ID
+  * @param string Optional Столбц, по которому выполняется сортировка статей (по умолчанию = "publicationDate DESC")
+  * @return Array|false Двух элементный массив: results =&gt; массив объектов Article; totalRows =&gt; общее количество строк
+  */
+ 
+  public static function getList( $numRows=1000000, $categoryId=null, $order="publicationDate DESC" ) {
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $categoryClause = $categoryId ? "WHERE categoryId = :categoryId" : "";
+    $sql = "SELECT SQL_CALC_FOUND_ROWS *, UNIX_TIMESTAMP(publicationDate) AS publicationDate
+            FROM articles $categoryClause
+            ORDER BY " . mysql_escape_string($order) . " LIMIT :numRows";
+ 
+    $st = $conn-&gt;prepare( $sql );
+    $st-&gt;bindValue( ":numRows", $numRows, PDO::PARAM_INT );
+    if ( $categoryId ) $st-&gt;bindValue( ":categoryId", $categoryId, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $list = array();
+ 
+    while ( $row = $st-&gt;fetch() ) {
+      $article = new Article( $row );
+      $list[] = $article;
+    }
+ 
+    // Получаем общее количество статей, которые соответствуют критерию
+    $sql = "SELECT FOUND_ROWS() AS totalRows";
+    $totalRows = $conn-&gt;query( $sql )-&gt;fetch();
+    $conn = null;
+    return ( array ( "results" =&gt; $list, "totalRows" =&gt; $totalRows[0] ) );
+  }
+ 
+ 
+  /**
+  * Вставляем текущий объек Article в базу данных, устанавливаем его ID.
+  */
+ 
+  public function insert() {
+ 
+    // Есть уже у объекта Article ID?
+    if ( !is_null( $this-&gt;id ) ) trigger_error ( "Article::insert(): Attempt to insert an Article object that already has its ID property set (to $this-&gt;id).", E_USER_ERROR );
+ 
+    // Вставляем статью
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "INSERT INTO articles ( publicationDate, categoryId, title, summary, content ) VALUES ( FROM_UNIXTIME(:publicationDate), :categoryId, :title, :summary, :content )";
+    $st = $conn-&gt;prepare ( $sql );
+    $st-&gt;bindValue( ":publicationDate", $this-&gt;publicationDate, PDO::PARAM_INT );
+    $st-&gt;bindValue( ":categoryId", $this-&gt;categoryId, PDO::PARAM_INT );
+    $st-&gt;bindValue( ":title", $this-&gt;title, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":summary", $this-&gt;summary, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":content", $this-&gt;content, PDO::PARAM_STR );
+    $st-&gt;execute();
+    $this-&gt;id = $conn-&gt;lastInsertId();
+    $conn = null;
+  }
+ 
+ 
+  /**
+  * Обновляем текущий объект Article в базе данных.
+  */
+ 
+  public function update() {
+ 
+    // У объекта Article есть ID?
+    if ( is_null( $this-&gt;id ) ) trigger_error ( "Article::update(): Attempt to update an Article object that does not have its ID property set.", E_USER_ERROR );
+    
+    // Обновляем статью
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "UPDATE articles SET publicationDate=FROM_UNIXTIME(:publicationDate), categoryId=:categoryId, title=:title, summary=:summary, content=:content WHERE id = :id";
+    $st = $conn-&gt;prepare ( $sql );
+    $st-&gt;bindValue( ":publicationDate", $this-&gt;publicationDate, PDO::PARAM_INT );
+    $st-&gt;bindValue( ":categoryId", $this-&gt;categoryId, PDO::PARAM_INT );
+    $st-&gt;bindValue( ":title", $this-&gt;title, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":summary", $this-&gt;summary, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":content", $this-&gt;content, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":id", $this-&gt;id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $conn = null;
+  }
+ 
+ 
+  /**
+  * Удаляем текущий объект Article из базы данных
+  */
+ 
+  public function delete() {
+ 
+    // У объекта Article есть ID?
+    if ( is_null( $this-&gt;id ) ) trigger_error ( "Article::delete(): Attempt to delete an Article object that does not have its ID property set.", E_USER_ERROR );
+ 
+    // Удаляем объект Article
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $st = $conn-&gt;prepare ( "DELETE FROM articles WHERE id = :id LIMIT 1" );
+    $st-&gt;bindValue( ":id", $this-&gt;id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $conn = null;
+  }
+ 
+}
+ 
+?&gt;
+</pre>
+</div>
+<p>Рассмотрим изменения в классе <code>Article</code> подробно:</p>
+<ul>
+<li><strong>Новое свойство <code>categoryId</code></strong>
+<p>Чтобы установить соответствие статьи и категории мы добавили           свойство <code>categoryId</code> для хранения ID категории,           которой принадлежит статья. Также мы модифицировали           конструктор <code>__construct()</code> для сохранения нового           свойства <code>categoryId</code> в только что созданных           объектах <code>Article</code>.</p>
+</li>
+<li><strong>Изменение метода&nbsp;<code>getList()</code></strong>
+<p>Первоначальный вариант метода <code>getList()</code> возвращал все статьи в базе данных (или заданное количество           записей). Так как нам нужно, чтобы CMS выводила список статей           в определенной категории, модифицируем метод <code>getList()</code> для принятия опционального аргумента&nbsp; <code>$categoryId</code>.           Если он задан, то возвращаются статьи только из указанной           категории.</p>
+<p>Если задан <code>$categoryId</code>, создаем строку <code>$categoryClause</code> для выражения <code>WHERE</code>, чтобы вернуть только те           статьи, в которых значение поля <code>categoryId</code> соответствует значению <code>categoryId</code>. Затем           модифицируем выражения SQL <code>SELECT</code> для включения           переменной <code>$categoryClause</code>. Также добавляем           новый вызов к <code>$st-&gt;bindValue()</code> для привязки           заданного <code>$categoryId.</code></p>
+</li>
+<li><strong>Изменяем методы <code>insert()</code> и <code>update()</code></strong>
+<p>Также мы модифицировали методы класса <code>Article</code>&nbsp;           <code>insert()</code> и <code>update()</code> для работы с           новым полем <code>categoryId</code>. Изменили запросы SQL <code>INSERT</code> и <code>UPDATE</code> в каждом методе, и добавили новые           вызовы к <code>bindValue()</code> для передачи свойства <code>$categoryId</code> в выражения SQL.</p>
+</li>
+</ul>
+<p>&nbsp;</p>
+         
+   
+<h2>Модифицируем скрипт <code>index.php</code> клиентской части</h2>
+<p>Добавим в скрипт клиентской части <code class="filename">index.php</code> функционал для отображения категорий. Вот так будет выглядеть       готовый файл <code class="filename">index.php</code> в папке <code class="filename">cms</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ 
+require( "config.php" );
+$action = isset( $_GET['action'] ) ? $_GET['action'] : "";
+ 
+switch ( $action ) {
+  case 'archive':
+    archive();
+    break;
+  case 'viewArticle':
+    viewArticle();
+    break;
+  default:
+    homepage();
+}
+ 
+function archive() {
+  $results = array();
+  $categoryId = ( isset( $_GET['categoryId'] ) &amp;&amp; $_GET['categoryId'] ) ? (int)$_GET['categoryId'] : null;
+  $results['category'] = Category::getById( $categoryId );
+  $data = Article::getList( 100000, $results['category'] ? $results['category']-&gt;id : null );
+  $results['articles'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $data = Category::getList();
+  $results['categories'] = array();
+  foreach ( $data['results'] as $category ) $results['categories'][$category-&gt;id] = $category;
+  $results['pageHeading'] = $results['category'] ?  $results['category']-&gt;name : "Article Archive";
+  $results['pageTitle'] = $results['pageHeading'] . " | Widget News";
+  require( TEMPLATE_PATH . "/archive.php" );
+}
+ 
+function viewArticle() {
+  if ( !isset($_GET["articleId"]) || !$_GET["articleId"] ) {
+    homepage();
+    return;
+  }
+ 
+  $results = array();
+  $results['article'] = Article::getById( (int)$_GET["articleId"] );
+  $results['category'] = Category::getById( $results['article']-&gt;categoryId );
+  $results['pageTitle'] = $results['article']-&gt;title . " | Widget News";
+  require( TEMPLATE_PATH . "/viewArticle.php" );
+}
+ 
+function homepage() {
+  $results = array();
+  $data = Article::getList( HOMEPAGE_NUM_ARTICLES );
+  $results['articles'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $data = Category::getList();
+  $results['categories'] = array();
+  foreach ( $data['results'] as $category ) $results['categories'][$category-&gt;id] = $category;
+  $results['pageTitle'] = "Widget News";
+  require( TEMPLATE_PATH . "/homepage.php" );
+}
+ 
+?&gt;
+</pre>
+<p>Рассмотрим подробно изменения функций в <code class="filename">index.php</code>:</p>
+<ul>
+<li><strong><code>archive()</code></strong>
+<p>Оригинальная функция <code>archive()</code> просто выводила           список всех статей в CMS. Мы адаптируем функцию <code>archive()</code> так, чтобы она принимала опциональный параметр <code>categoryId</code>.           Если <code>categoryId</code> задан, то функция возвращает           соответствующий объект <code>Category</code> с помощью вызова           <code>Category::getById()</code>, и если действие было           успешным, передает ID категории в функцию <code>Article::getList()</code> для получения статей только из соответствующей категории.</p>
+<p>Также добавляем код в функцию <code>archive()</code> для           получения всех категорий в базе данных и сохранения их в&nbsp;           <code>$results['categories']</code> с ID категории в качестве           ключа. Шаблон страницы архива <code class="filename">archive.php</code> использует данный массив для вывода имени категории для каждой           статьи.</p>
+<p>Создаем переменную <code>$results['pageHeading']</code>,           которая содержит либо имя категории (если <code>categoryId</code> было задано), либо текст "Article Archive". Данное значение           будет отображаться в заголовке страницы архива. Также создаем           переменную <code>$results['pageTitle']</code> для           использования в элементе&nbsp; <code>&lt;title&gt;</code>.           Просто для вывода названия сайта "Widget News" в заголовке           страницы.</p>
+<p>&nbsp;</p>
+</li>
+<li><strong><code>viewArticle()</code></strong>
+<p>Здесь мы делаем только одно добавление: возвращаем объект <code>Category</code> соответствующий статье с помощью вызова метода <code>Category::getById()</code>,&nbsp;             передавая ему значение свойства статьи <code>$categoryId</code>.           Полученный объект <code>Category</code> сохраняем <code>$results['category']</code>.           Будем использовать данный объект для вывода названия категории           в шаблоне <code class="filename">viewArticle.php</code>.</p>
+</li>
+<li><strong><code>homepage()</code></strong>
+<p>В функцию <code>homepage()</code> добавляем три строки.           Данный код вызывает&nbsp;<code>Category::getList()</code> для           получения всех категорий в CMS, затем сохраняем категории в <code>$results['categories']</code> с ID категории в качестве ключа. То есть мы можем вывести           названия категорий для каждой статьи на главной странице.</p>
+</li>
+</ul>
+<p>&nbsp;</p>
+<h2>Модифицируем скрипт серверной части <code>admin.php</code></h2>
+<p>Файл <code class="filename">admin.php</code> содержит все       функции администратора для нашей CMS. Нужно сделать несколько       изменений и добавлений в данном файле для обработки категорий.</p>
+<p>Новый код файла <code class="filename">admin.php</code>, будет       выглядеть следующим образом:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ 
+require( "config.php" );
+session_start();
+$action = isset( $_GET['action'] ) ? $_GET['action'] : "";
+$username = isset( $_SESSION['username'] ) ? $_SESSION['username'] : "";
+ 
+if ( $action != "login" &amp;&amp; $action != "logout" &amp;&amp; !$username ) {
+  login();
+  exit;
+}
+ 
+switch ( $action ) {
+  case 'login':
+    login();
+    break;
+  case 'logout':
+    logout();
+    break;
+  case 'newArticle':
+    newArticle();
+    break;
+  case 'editArticle':
+    editArticle();
+    break;
+  case 'deleteArticle':
+    deleteArticle();
+    break;
+  case 'listCategories':
+    listCategories();
+    break;
+  case 'newCategory':
+    newCategory();
+    break;
+  case 'editCategory':
+    editCategory();
+    break;
+  case 'deleteCategory':
+    deleteCategory();
+    break;
+  default:
+    listArticles();
+}
+ 
+ 
+function login() {
+ 
+  $results = array();
+  $results['pageTitle'] = "Admin Login | Widget News";
+ 
+  if ( isset( $_POST['login'] ) ) {
+ 
+    // User has posted the login form: attempt to log the user in
+ 
+    if ( $_POST['username'] == ADMIN_USERNAME &amp;&amp; $_POST['password'] == ADMIN_PASSWORD ) {
+ 
+      // Login successful: Create a session and redirect to the admin homepage
+      $_SESSION['username'] = ADMIN_USERNAME;
+      header( "Location: admin.php" );
+ 
+    } else {
+ 
+      // Login failed: display an error message to the user
+      $results['errorMessage'] = "Incorrect username or password. Please try again.";
+      require( TEMPLATE_PATH . "/admin/loginForm.php" );
+    }
+ 
+  } else {
+ 
+    // User has not posted the login form yet: display the form
+    require( TEMPLATE_PATH . "/admin/loginForm.php" );
+  }
+ 
+}
+ 
+ 
+function logout() {
+  unset( $_SESSION['username'] );
+  header( "Location: admin.php" );
+}
+ 
+ 
+function newArticle() {
+ 
+  $results = array();
+  $results['pageTitle'] = "New Article";
+  $results['formAction'] = "newArticle";
+ 
+  if ( isset( $_POST['saveChanges'] ) ) {
+ 
+    // User has posted the article edit form: save the new article
+    $article = new Article;
+    $article-&gt;storeFormValues( $_POST );
+    $article-&gt;insert();
+    header( "Location: admin.php?status=changesSaved" );
+ 
+  } elseif ( isset( $_POST['cancel'] ) ) {
+ 
+    // User has cancelled their edits: return to the article list
+    header( "Location: admin.php" );
+  } else {
+ 
+    // User has not posted the article edit form yet: display the form
+    $results['article'] = new Article;
+    $data = Category::getList();
+    $results['categories'] = $data['results'];
+    require( TEMPLATE_PATH . "/admin/editArticle.php" );
+  }
+ 
+}
+ 
+ 
+function editArticle() {
+ 
+  $results = array();
+  $results['pageTitle'] = "Edit Article";
+  $results['formAction'] = "editArticle";
+ 
+  if ( isset( $_POST['saveChanges'] ) ) {
+ 
+    // User has posted the article edit form: save the article changes
+ 
+    if ( !$article = Article::getById( (int)$_POST['articleId'] ) ) {
+      header( "Location: admin.php?error=articleNotFound" );
+      return;
+    }
+ 
+    $article-&gt;storeFormValues( $_POST );
+    $article-&gt;update();
+    header( "Location: admin.php?status=changesSaved" );
+ 
+  } elseif ( isset( $_POST['cancel'] ) ) {
+ 
+    // User has cancelled their edits: return to the article list
+    header( "Location: admin.php" );
+  } else {
+ 
+    // User has not posted the article edit form yet: display the form
+    $results['article'] = Article::getById( (int)$_GET['articleId'] );
+    $data = Category::getList();
+    $results['categories'] = $data['results'];
+    require( TEMPLATE_PATH . "/admin/editArticle.php" );
+  }
+ 
+}
+ 
+ 
+function deleteArticle() {
+ 
+  if ( !$article = Article::getById( (int)$_GET['articleId'] ) ) {
+    header( "Location: admin.php?error=articleNotFound" );
+    return;
+  }
+ 
+  $article-&gt;delete();
+  header( "Location: admin.php?status=articleDeleted" );
+}
+ 
+ 
+function listArticles() {
+  $results = array();
+  $data = Article::getList();
+  $results['articles'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $data = Category::getList();
+  $results['categories'] = array();
+  foreach ( $data['results'] as $category ) $results['categories'][$category-&gt;id] = $category;
+  $results['pageTitle'] = "All Articles";
+ 
+  if ( isset( $_GET['error'] ) ) {
+    if ( $_GET['error'] == "articleNotFound" ) $results['errorMessage'] = "Error: Article not found.";
+  }
+ 
+  if ( isset( $_GET['status'] ) ) {
+    if ( $_GET['status'] == "changesSaved" ) $results['statusMessage'] = "Your changes have been saved.";
+    if ( $_GET['status'] == "articleDeleted" ) $results['statusMessage'] = "Article deleted.";
+  }
+ 
+  require( TEMPLATE_PATH . "/admin/listArticles.php" );
+}
+ 
+ 
+function listCategories() {
+  $results = array();
+  $data = Category::getList();
+  $results['categories'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $results['pageTitle'] = "Article Categories";
+ 
+  if ( isset( $_GET['error'] ) ) {
+    if ( $_GET['error'] == "categoryNotFound" ) $results['errorMessage'] = "Error: Category not found.";
+    if ( $_GET['error'] == "categoryContainsArticles" ) $results['errorMessage'] = "Error: Category contains articles. Delete the articles, or assign them to another category, before deleting this category.";
+  }
+ 
+  if ( isset( $_GET['status'] ) ) {
+    if ( $_GET['status'] == "changesSaved" ) $results['statusMessage'] = "Your changes have been saved.";
+    if ( $_GET['status'] == "categoryDeleted" ) $results['statusMessage'] = "Category deleted.";
+  }
+ 
+  require( TEMPLATE_PATH . "/admin/listCategories.php" );
+}
+ 
+ 
+function newCategory() {
+ 
+  $results = array();
+  $results['pageTitle'] = "New Article Category";
+  $results['formAction'] = "newCategory";
+ 
+  if ( isset( $_POST['saveChanges'] ) ) {
+ 
+    // User has posted the category edit form: save the new category
+    $category = new Category;
+    $category-&gt;storeFormValues( $_POST );
+    $category-&gt;insert();
+    header( "Location: admin.php?action=listCategories&amp;status=changesSaved" );
+ 
+  } elseif ( isset( $_POST['cancel'] ) ) {
+ 
+    // User has cancelled their edits: return to the category list
+    header( "Location: admin.php?action=listCategories" );
+  } else {
+ 
+    // User has not posted the category edit form yet: display the form
+    $results['category'] = new Category;
+    require( TEMPLATE_PATH . "/admin/editCategory.php" );
+  }
+ 
+}
+ 
+ 
+function editCategory() {
+ 
+  $results = array();
+  $results['pageTitle'] = "Edit Article Category";
+  $results['formAction'] = "editCategory";
+ 
+  if ( isset( $_POST['saveChanges'] ) ) {
+ 
+    // User has posted the category edit form: save the category changes
+ 
+    if ( !$category = Category::getById( (int)$_POST['categoryId'] ) ) {
+      header( "Location: admin.php?action=listCategories&amp;error=categoryNotFound" );
+      return;
+    }
+ 
+    $category-&gt;storeFormValues( $_POST );
+    $category-&gt;update();
+    header( "Location: admin.php?action=listCategories&amp;status=changesSaved" );
+ 
+  } elseif ( isset( $_POST['cancel'] ) ) {
+ 
+    // User has cancelled their edits: return to the category list
+    header( "Location: admin.php?action=listCategories" );
+  } else {
+ 
+    // User has not posted the category edit form yet: display the form
+    $results['category'] = Category::getById( (int)$_GET['categoryId'] );
+    require( TEMPLATE_PATH . "/admin/editCategory.php" );
+  }
+ 
+}
+ 
+ 
+function deleteCategory() {
+ 
+  if ( !$category = Category::getById( (int)$_GET['categoryId'] ) ) {
+    header( "Location: admin.php?action=listCategories&amp;error=categoryNotFound" );
+    return;
+  }
+ 
+  $articles = Article::getList( 1000000, $category-&gt;id );
+ 
+  if ( $articles['totalRows'] &gt; 0 ) {
+    header( "Location: admin.php?action=listCategories&amp;error=categoryContainsArticles" );
+    return;
+  }
+ 
+  $category-&gt;delete();
+  header( "Location: admin.php?action=listCategories&amp;status=categoryDeleted" );
+}
+ 
+?&gt;
+</pre>
+<p>Расмотрим изменения в файле <code class="filename">admin.php</code> подробно:</p>
+<ul>
+<li><strong>Добавления Additions to the <code>switch</code> block</strong>
+<p>Нам нужно добавить новый функционал в файл <code class="filename">admin.php</code> для обработки вывода,           создания, редактирования и удаления категорий. Поэтому мы           добавляем блоки <code class="filename">listCategories</code>,           <code class="filename">newCategory</code>, <code class="filename">editCategory</code> и <code class="filename">deleteCategory</code> <code class="filename">case</code> в выражение <code class="filename">switch</code> в начале файла. Данные блоки           вызывают различные функции для обработки категорий.</p>
+</li>
+<li><strong>Изменения в функциях <code>newArticle()</code>, <code>editArticle()</code> и <code>listArticles()</code></strong>
+<p>Нужно сделать небольшие изменения в каждой из перечисленных           функций для получения списка категорий в базе данных и           использования в форме редактирования и создания статьи.           Полученный список категорий хранится в переменной <code>$results['categories']</code>.           Для функции <code>listArticles()</code> мы также используем в           качестве ключа ID категории для облегчения применения списка в           шаблоне <code class="filename">listArticles.php.</code></p>
+</li>
+<li><strong><code>listCategories()</code></strong>
+<p>Данная функция выводит список всех категорий для           администратора. Она работает так же как и функция <code>listArticles()</code>.           Все категории извлекаются из базы данных с помощью           функции&nbsp; <code>Category::getList()</code>, затем           сохраняются в массиве <code>$results['categories']</code>.           Также записывается общее количество категорий в переменной <code>$results['totalRows']</code> и сохраняется название страницы в переменной <code>$results['pageTitle']</code>.           Затем производится проверка на наличие кодов статуса в строке           запроса и устанавливаются значения переменных <code>$results['errorMessage']</code> или <code>$results['statusMessage']</code> соответственно. В           завершение включается шаблон <code>listCategories.php</code> для вывода списка категорий.</p>
+</li>
+<li><strong><code>newCategory()</code></strong>
+<p>Функция для добавления новых категорий в базу данных, так же           как и <code>newArticle()</code> добавляет новую статью. Если           пользователь передал форму редактирования категории, то           функция создает новый объект <code>Category</code> object,           наполняет его данными из формы, вызывает функцию <code>insert()</code> для вставки категории в базу данных, и перенаправляет на           страницу со списком категорий, выводя сообщение о сохранении           изменений. Если пользователь нажимает кнопку Cancel в форме,           то функция просто перенаправляет на список категорий.           Если&nbsp; пользователь еще не отправил форму, то функция           создает новый пустой объект <code>Category</code> для           использования в форме, сохраняет его в <code>$results['category']</code> и включает шаблон <code class="filename">editCategory.php</code> для вывода формы редактирования категории.</p>
+</li>
+<li><strong><code>editCategory()</code></strong>
+<p>Данная функция редактирует существующую категорию в базе           данных, позволяя пользователю менять название категории и/или           описание.она действует по такому же сценарию, что и <code>editArticle()</code>.&nbsp;           Если форма редактирования отправлена, загружаем категорию из           базы данных, сохраняем новые значения формы в объекте           Category, и обновляем категорию в базе данных с помощью метода           <code>update()</code>. Если пользователь отказался от           редактирования, то функция перенаправляет его на список           категорий. Если пользователь еще не отправил форму, то функция           загружает категорию, указанную параметром <code>categoryId</code> в строке запроса, сохраняет ее в переменной <code>$results['category']</code> и включает шаблон <code class="filename">editCategory.php</code> для вывода заполненной формы редактирования.</p>
+</li>
+<li><strong><code>deleteCategory()</code></strong>
+<p>Последняя новая функция позволяет удалять категорию из базы           данных. Она вызывается, когда пользователь нажимает ссылку           Delete This Category (Удалить категорию ) на странице           редактирования категорий. Сначала функция получает категорию,           заданную параметром запроса <code>categoryId</code>&nbsp;           (если категории нет, то выводится сообщение об ошибке). Затем           производится проверка наличия статьей в категории. Если статьи           есть , то выводится сообщение об ошибке и происходит выход из           функции. Если статей в категории нет, то функция удаляет           категорию и перенаправляет на страницу со списком категорий,           выводя сообщение об удалении категории.</p>
+</li>
+</ul>
+<h2>Клиентская часть</h2>
+<p>Сначала изменим клиентскую часть, для отображения категории       статьи в общем списке и на страницах архива.</p>
+<p><img title="Клиентская часть CMS" src="lessons/les1601/img_1.jpg" alt="Клиентская часть CMS" /></p>
+<h3><code class="filename">homepage.php</code></h3>
+<p>Мы сделаем небольшие изменения в шаблоне <code class="filename">homepage.php</code>,       который выводит главную страницу. Нужно, чтобы категория каждой       статьи выводилась ниже названия. Новый код файла <code class="filename">cms/templates/homepage.php</code> будет       выглядеть так:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;ul id="headlines"&gt;
+ 
+&lt;?php foreach ( $results['articles'] as $article ) { ?&gt;
+ 
+        &lt;li&gt;
+          &lt;h2&gt;
+            &lt;span class="pubDate"&gt;&lt;?php echo date('j F', $article-&gt;publicationDate)?&gt;&lt;/span&gt;&lt;a href=".?action=viewArticle&amp;amp;articleId=&lt;?php echo $article-&gt;id?&gt;"&gt;&lt;?php echo htmlspecialchars( $article-&gt;title )?&gt;&lt;/a&gt;
+            &lt;?php if ( $article-&gt;categoryId ) { ?&gt;
+            &lt;span class="category"&gt;in &lt;a href=".?action=archive&amp;amp;categoryId=&lt;?php echo $article-&gt;categoryId?&gt;"&gt;&lt;?php echo htmlspecialchars( $results['categories'][$article-&gt;categoryId]-&gt;name )?&gt;&lt;/a&gt;&lt;/span&gt;
+            &lt;?php } ?&gt;
+          &lt;/h2&gt;
+          &lt;p class="summary"&gt;&lt;?php echo htmlspecialchars( $article-&gt;summary )?&gt;&lt;/p&gt;
+        &lt;/li&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/ul&gt;
+ 
+      &lt;p&gt;&lt;a href="./?action=archive"&gt;Article Archive&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Мы вставили проверку вхождения статьи в категорию с помощью       свойства <code>$categoryId</code>. Если статья имеет       идентификатор категории, то вставляем элемент <code>&lt;span&gt;</code> с именем категории в код страницы. Для решения используем объект <code>Category</code> из массива <code>$results['categories']</code>, который       выбирается с помощью ID категории, а затем выводим свойство <code>name</code>.</p>
+<p>Код также помещает имя категории в ссылку, которая ведет на       страницу архива для категории, так что пользователь легко может       просмотреть все статьи из той же категории.</p>
+<h3><code class="filename">archive.php</code></h3>
+<p>Шаблон <code class="filename">archive.php</code> выводит архив       статей. В базовом варианте нашей CMS архив просто выводил список       всех статей. Однако, теперь функция <code>archive()</code> в<code> </code><code class="filename">index.php</code> может выводить       список статей только из указанной категории. То есть нам нужно       внести изменения в шаблон для реализации новых возможностей.</p>
+<p>Новый код файла <code class="filename">cms/templates/archive.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;h1&gt;&lt;?php echo htmlspecialchars( $results['pageHeading'] ) ?&gt;&lt;/h1&gt;
+&lt;?php if ( $results['category'] ) { ?&gt;
+      &lt;h3 class="categoryDescription"&gt;&lt;?php echo htmlspecialchars( $results['category']-&gt;description ) ?&gt;&lt;/h3&gt;
+&lt;?php } ?&gt;
+ 
+      &lt;ul id="headlines" class="archive"&gt;
+ 
+&lt;?php foreach ( $results['articles'] as $article ) { ?&gt;
+ 
+        &lt;li&gt;
+          &lt;h2&gt;
+            &lt;span class="pubDate"&gt;&lt;?php echo date('j F Y', $article-&gt;publicationDate)?&gt;&lt;/span&gt;&lt;a href=".?action=viewArticle&amp;amp;articleId=&lt;?php echo $article-&gt;id?&gt;"&gt;&lt;?php echo htmlspecialchars( $article-&gt;title )?&gt;&lt;/a&gt;
+&lt;?php if ( !$results['category'] &amp;&amp; $article-&gt;categoryId ) { ?&gt;
+            &lt;span class="category"&gt;in &lt;a href=".?action=archive&amp;amp;categoryId=&lt;?php echo $article-&gt;categoryId?&gt;"&gt;&lt;?php echo htmlspecialchars( $results['categories'][$article-&gt;categoryId]-&gt;name ) ?&gt;&lt;/a&gt;&lt;/span&gt;
+&lt;?php } ?&gt;           
+          &lt;/h2&gt;
+          &lt;p class="summary"&gt;&lt;?php echo htmlspecialchars( $article-&gt;summary )?&gt;&lt;/p&gt;
+        &lt;/li&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/ul&gt;
+ 
+      &lt;p&gt;&lt;?php echo $results['totalRows']?&gt; article&lt;?php echo ( $results['totalRows'] != 1 ) ? 's' : '' ?&gt; in total.&lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="./"&gt;Return to Homepage&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Мы изменили заголовок &lt;h1&gt; для вывода значения <code>$results['pageHeading']</code>,       а не простой надписи "<em>Article Archive</em>" (архив статей).       Новая функция <code>archive()</code> динамически формирует       заголовок в зависимости от просматриваемой категории.</p>
+<p>Затем мы добавляем код для проверки того, что нужно выводить       список для определенной категории, а не всех статей в базе данных.       Для этого просматриваем переменную <code>$results['category']</code>.       Если она имеется, то нужно выводить список для категории, и код       формирует в заголовке описание категории.</p>
+<p>Цикл, который формирует вывод статей также изменяется. Новый код       запускается, если нужно выводить список всех статей и текущая       статья включена в категорию. В таком случае добавляется элемент <code>&lt;span&gt;</code>,       который содержит имя категории в виде ссылки на страницу архива       категории, чтобы пользователь мог просмотреть все статьи из нее.</p>
+<h3><code class="filename">viewArticle.php</code></h3>
+<p>Шаблон <code class="filename">viewArticle.php</code> выводит       страницу статьи. Новый код файла <code class="filename">cms/templates/viewArticle.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;h1 style="width: 75%;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;title )?&gt;&lt;/h1&gt;
+      &lt;div style="width: 75%; font-style: italic;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;summary )?&gt;&lt;/div&gt;
+      &lt;div style="width: 75%;"&gt;&lt;?php echo $results['article']-&gt;content?&gt;&lt;/div&gt;
+      &lt;p class="pubDate"&gt;Published on &lt;?php echo date('j F Y', $results['article']-&gt;publicationDate)?&gt;
+&lt;?php if ( $results['category'] ) { ?&gt;
+        in &lt;a href="./?action=archive&amp;amp;categoryId=&lt;?php echo $results['category']-&gt;id?&gt;"&gt;&lt;?php echo htmlspecialchars( $results['category']-&gt;name ) ?&gt;&lt;/a&gt;
+&lt;?php } ?&gt;
+      &lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="./"&gt;Return to Homepage&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Здесь вносится небольшое добавление для вывода названия категории       внизу. Название категории является ссылкой на соответствующую       страницу архива.</p>
+<h3>Стили клиентской части</h3>
+<p>Также нужно внести изменения в таблицу стилей <code class="filename">style.css</code> для формирования внешнего вида       имен категорий и описаний на главной странице и в архиве.</p>
+<p>Новый код файла<code class="filename"> style.css</code> из папки       <code class="filename">cms</code>:</p>
+<div class="code_sample">
+<pre class="brush:css">/* Style the body and outer container */
+ 
+body {
+  margin: 0;
+  color: #333;
+  background-color: #00a0b0;
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  line-height: 1.5em;
+}
+ 
+#container {
+  width: 960px;
+  background: #fff;
+  margin: 20px auto;
+  padding: 20px;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+}
+ 
+ 
+/* The logo and footer */
+ 
+#logo {
+  display: block;
+  width: 300px;
+  padding: 0 660px 20px 0;
+  border: none;
+  border-bottom: 1px solid #00a0b0;
+  margin-bottom: 40px;
+}
+ 
+#footer {
+  border-top: 1px solid #00a0b0;
+  margin-top: 40px;
+  padding: 20px 0 0 0;
+  font-size: .8em;
+}
+ 
+ 
+/* Headings */
+ 
+h1 {
+  color: #eb6841;
+  margin-bottom: 30px;
+  line-height: 1.2em;
+}
+ 
+h2, h2 a {
+  color: #edc951;
+}
+ 
+h2 a {
+  text-decoration: none;
+}
+ 
+h3.categoryDescription {
+  margin-top: -20px;
+  margin-bottom: 40px;
+}
+ 
+ 
+/* Article headlines */
+ 
+#headlines {
+  list-style: none;
+  padding-left: 0;
+  width: 75%;
+}
+ 
+#headlines li {
+  margin-bottom: 2em;
+  clear: both;
+}
+ 
+.pubDate {
+  font-size: .8em;
+  color: #eb6841;
+  text-transform: uppercase;
+}
+ 
+#headlines .pubDate {
+  display: block;
+  width: 100px;
+  padding-top: 4px;
+  float: left;
+  font-size: .5em;
+  vertical-align: middle;
+}
+ 
+#headlines.archive .pubDate {
+  width: 130px;
+}
+ 
+.summary {
+  padding-left: 100px;
+}
+ 
+#headlines.archive .summary {
+  padding-left: 130px;
+}
+ 
+.category {
+  font-style: italic;
+  font-weight: normal;
+  font-size: 60%;
+  color: #999;
+  display: block;
+  line-height: 2em;
+}
+ 
+.category a {
+  color: #999;
+  text-decoration: underline;
+}
+ 
+ 
+/* "You are logged in..." header on admin pages */
+ 
+#adminHeader {
+  width: 940px;
+  padding: 0 10px;
+  border-bottom: 1px solid #00a0b0;
+  margin: -30px 0 40px 0;
+  font-size: 0.8em;
+}
+ 
+ 
+/* Style the form with a coloured background, along with curved corners and a drop shadow */
+ 
+form {
+  margin: 20px auto;
+  padding: 40px 20px;
+  overflow: auto;
+  background: #fff4cf;
+  border: 1px solid #666;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px; 
+  border-radius: 5px;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+}
+ 
+ 
+/* Give form elements consistent margin, padding and line height */
+ 
+form ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ 
+form ul li {
+  margin: .9em 0 0 0;
+  padding: 0;
+}
+ 
+form * {
+  line-height: 1em;
+}
+ 
+ 
+/* The field labels */
+ 
+label {
+  display: block;
+  float: left;
+  clear: left;
+  text-align: right;
+  width: 15%;
+  padding: .4em 0 0 0;
+  margin: .15em .5em 0 0;
+}
+ 
+ 
+/* The fields */
+ 
+input, select, textarea {
+  display: block;
+  margin: 0;
+  padding: .4em;
+  width: 80%;
+}
+ 
+input, textarea, .date {
+  border: 2px solid #666;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;   
+  border-radius: 5px;
+  background: #fff;
+}
+ 
+input {
+  font-size: .9em;
+}
+ 
+select {
+  padding: 0;
+  margin-bottom: 2.5em;
+  position: relative;
+  top: .7em;
+}
+ 
+textarea {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  font-size: .9em;
+  height: 5em;
+  line-height: 1.5em;
+}
+ 
+textarea#content {
+  font-family: "Courier New", courier, fixed;
+}
+   
+ 
+/* Place a border around focused fields */
+ 
+form *:focus {
+  border: 2px solid #7c412b;
+  outline: none;
+}
+ 
+ 
+/* Display correctly filled-in fields with a green background */
+ 
+input:valid, textarea:valid {
+  background: #efe;
+}
+ 
+ 
+/* Submit buttons */
+ 
+.buttons {
+  text-align: center;
+  margin: 40px 0 0 0;
+}
+ 
+input[type="submit"] {
+  display: inline;
+  margin: 0 20px;
+  width: 12em;
+  padding: 10px;
+  border: 2px solid #7c412b;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px; 
+  border-radius: 5px;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  color: #fff;
+  background: #ef7d50;
+  font-weight: bold;
+  -webkit-appearance: none;
+}
+ 
+input[type="submit"]:hover, input[type="submit"]:active {
+  cursor: pointer;
+  background: #fff;
+  color: #ef7d50;
+}
+ 
+input[type="submit"]:active {
+  background: #eee;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8) inset;
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8) inset;
+  box-shadow: 0 0 .5em rgba(0, 0, 0, .8) inset;
+}
+ 
+ 
+/* Tables */
+ 
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+ 
+tr, th, td {
+  padding: 10px;
+  margin: 0;
+  text-align: left;
+}
+ 
+table, th {
+  border: 1px solid #00a0b0;
+}
+ 
+th {
+  border-left: none;
+  border-right: none;
+  background: #ef7d50;
+  color: #fff;
+  cursor: default;
+}
+ 
+tr:nth-child(odd) {
+  background: #fff4cf;
+}
+ 
+tr:nth-child(even) {
+  background: #fff;
+}
+ 
+tr:hover {
+  background: #ddd;
+  cursor: pointer;
+}
+ 
+ 
+/* Status and error boxes */
+ 
+.statusMessage, .errorMessage {
+  font-size: .8em;
+  padding: .5em;
+  margin: 2em 0;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+}
+ 
+.statusMessage {
+  background-color: #2b2;
+  border: 1px solid #080;
+  color: #fff;
+}
+ 
+.errorMessage {
+  background-color: #f22;
+  border: 1px solid #800;
+  color: #fff;
+}
+</pre>
+</div>
+<p>Добавляем селектор <code>h3.categoryDescription</code> для       описания категории, идентификатор <code>#headlines</code> для       имени категории и класс <code>.category</code> для вывода       названия категории на главной странице и в архиве.</p>
+<p>&nbsp;</p>
+<h2>Серверная часть</h2>
+<p>Осталось изменить шаблоны серверной части. Нужно добавить пару       новых шаблонов для вывода списка, добавления, редактирования и       удаления категорий. Также нужно модифицировать страницу списка       статей для вывода категорий, форму редактирования статьи, чтобы       администратор мог добавить категорию для статьи, и заголовок       страницы администратора для включения пункта меню, включающего       редактор категории.</p>
+<p><img title="Серверная часть CMS" src="img_2.jpg" alt="Серверная часть CMS" /></p>
+<h3>Добавляем шаблон <code class="filename">listCategories.php</code></h3>
+<p>Создаем шаблон <code class="filename">listCategories.php</code>,       который выводит список категорий в базе данных. Он очень похож на       <code class="filename">listArticles.php</code> (шаблон списка       статей).</p>
+<p>Код файла <code class="filename">listCategories.php</code> в       папке <code class="filename">cms/templates/admin</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+&lt;?php include "templates/admin/include/header.php" ?&gt;
+ 
+      &lt;h1&gt;Article Categories&lt;/h1&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+ 
+&lt;?php if ( isset( $results['statusMessage'] ) ) { ?&gt;
+        &lt;div class="statusMessage"&gt;&lt;?php echo $results['statusMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+      &lt;table&gt;
+        &lt;tr&gt;
+          &lt;th&gt;Category&lt;/th&gt;
+        &lt;/tr&gt;
+ 
+&lt;?php foreach ( $results['categories'] as $category ) { ?&gt;
+ 
+        &lt;tr onclick="location='admin.php?action=editCategory&amp;amp;categoryId=&lt;?php echo $category-&gt;id?&gt;'"&gt;
+          &lt;td&gt;
+            &lt;?php echo $category-&gt;name?&gt;
+          &lt;/td&gt;
+        &lt;/tr&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/table&gt;
+ 
+      &lt;p&gt;&lt;?php echo $results['totalRows']?&gt; categor&lt;?php echo ( $results['totalRows'] != 1 ) ? 'ies' : 'y' ?&gt; in total.&lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="admin.php?action=newCategory"&gt;Add a New Category&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;</pre>
+</div>
+<p>Данный шаблон достаточно простой. Он включает стандартный           заголовок страницы и файл заголовка администратора, где           выводится также сообщения о статусе и ошибках. Затем выводится           таблица категорий в базе данных. Цикл проходит по всем           категориям в массиве <code>$results['categories']</code> и           формирует строку таблицы с именем категории. Строка таблицы           ссылается на <code>admin.php?action=editCategory</code>,           передавая ID категории, так что администратор может           редактировать категорию, нажав на строку таблицы.</p>
+<p>Шаблон также выводит общее количество категорий в базе           данных, включая ссылку функцию добавления новой категории.</p>
+<p>&nbsp;</p>
+<h3>Добавляем <code class="filename">editCategory.php</code></h3>
+<p>Шаблон <code class="filename">editCategory.php</code> выводит форму редактирования, позволяя администратору           добавлять категорию или редактировать существующую. Он очень           похож на <code class="filename">editArticle.php</code>, но           немного проще.</p>
+<p>Код файла <code class="filename">editCategory.php</code> в           папке <code class="filename">cms/templates/admin</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+&lt;?php include "templates/admin/include/header.php" ?&gt;
+ 
+      &lt;h1&gt;&lt;?php echo $results['pageTitle']?&gt;&lt;/h1&gt;
+ 
+      &lt;form action="admin.php?action=&lt;?php echo $results['formAction']?&gt;" method="post"&gt;
+        &lt;input type="hidden" name="categoryId" value="&lt;?php echo $results['category']-&gt;id ?&gt;"/&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+        &lt;ul&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="name"&gt;Category Name&lt;/label&gt;
+            &lt;input type="text" name="name" id="name" placeholder="Name of the category" required autofocus maxlength="255" value="&lt;?php echo htmlspecialchars( $results['category']-&gt;name )?&gt;" /&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="description"&gt;Description&lt;/label&gt;
+            &lt;textarea name="description" id="description" placeholder="Brief description of the category" required maxlength="1000" style="height: 5em;"&gt;&lt;?php echo htmlspecialchars( $results['category']-&gt;description )?&gt;&lt;/textarea&gt;
+          &lt;/li&gt;
+ 
+        &lt;/ul&gt;
+ 
+        &lt;div class="buttons"&gt;
+          &lt;input type="submit" name="saveChanges" value="Save Changes" /&gt;
+          &lt;input type="submit" formnovalidate name="cancel" value="Cancel" /&gt;
+        &lt;/div&gt;
+ 
+      &lt;/form&gt;
+ 
+&lt;?php if ( $results['category']-&gt;id ) { ?&gt;
+      &lt;p&gt;&lt;a href="admin.php?action=deleteCategory&amp;amp;categoryId=&lt;?php echo $results['category']-&gt;id ?&gt;" onclick="return confirm('Delete This Category?')"&gt;Delete This Category&lt;/a&gt;&lt;/p&gt;
+&lt;?php } ?&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>В шаблон включаются файлы заголовков, затем выводится           содержание&nbsp; <code>$results['pageTitle']</code>, которое           имеет значения либо "New Article Category"(новая категория           статьи), либо "Edit Article Category"(редактирование категории           статьи). И создается форма, которая отправляется в <code class="filename">admin.php</code> со значением переменной <code>$results['formAction']</code> (<code>"newCategory"</code> или <code>"editCategory"</code>)           в параметре <code>action</code>.</p>
+<p>Сама форма включает скрытое поле <code>categoryId</code> для           отслеживания ID текущей редактируемой статьи (если она есть).           Выводятся сообщения об ошибках, поля для названия категории и           описания, а также кнопки для сохранения и отмены изменений.</p>
+<p>Шаблон также включает ссылку на удаление текущей           редактируемой категории и нижний колонтитул страницы.</p>
+<h3>Изменяем <code class="filename">listArticles.php</code></h3>
+<p>Нужно изменить шаблон для списка статей, чтобы реализовать           новый функционал. Сохраняем новый код файла <code class="filename">cms/templates/admin/listArticles.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+&lt;?php include "templates/admin/include/header.php" ?&gt;
+ 
+      &lt;h1&gt;All Articles&lt;/h1&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+ 
+&lt;?php if ( isset( $results['statusMessage'] ) ) { ?&gt;
+        &lt;div class="statusMessage"&gt;&lt;?php echo $results['statusMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+      &lt;table&gt;
+        &lt;tr&gt;
+          &lt;th&gt;Publication Date&lt;/th&gt;
+          &lt;th&gt;Article&lt;/th&gt;
+          &lt;th&gt;Category&lt;/th&gt;
+        &lt;/tr&gt;
+ 
+&lt;?php foreach ( $results['articles'] as $article ) { ?&gt;
+ 
+        &lt;tr onclick="location='admin.php?action=editArticle&amp;amp;articleId=&lt;?php echo $article-&gt;id?&gt;'"&gt;
+          &lt;td&gt;&lt;?php echo date('j M Y', $article-&gt;publicationDate)?&gt;&lt;/td&gt;
+          &lt;td&gt;
+            &lt;?php echo $article-&gt;title?&gt;
+          &lt;/td&gt;
+          &lt;td&gt;
+            &lt;?php echo $results['categories'][$article-&gt;categoryId]-&gt;name?&gt;
+          &lt;/td&gt;
+        &lt;/tr&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/table&gt;
+ 
+      &lt;p&gt;&lt;?php echo $results['totalRows']?&gt; article&lt;?php echo ( $results['totalRows'] != 1 ) ? 's' : '' ?&gt; in total.&lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="admin.php?action=newArticle"&gt;Add a New Article&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Мы добавили новый столбец для категорий в списке статей. В           цикле формирования строк происходит поиск соответствующего           объекта <code>Category</code> по ID в массиве <code>$results['categories']</code> и выводится название категории.</p>
+<h3>Редактируем <code class="filename">editArticle.php</code></h3>
+<p>Также нужно модифицировать форму редактирования статьи <code class="filename">editArticle.php</code> для           добавления возможности назначать категорию статье.</p>
+<p>Новый код файла <code class="filename">cms/templates/admin/editArticle.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+&lt;?php include "templates/admin/include/header.php" ?&gt;
+ 
+      &lt;h1&gt;&lt;?php echo $results['pageTitle']?&gt;&lt;/h1&gt;
+ 
+      &lt;form action="admin.php?action=&lt;?php echo $results['formAction']?&gt;" method="post"&gt;
+        &lt;input type="hidden" name="articleId" value="&lt;?php echo $results['article']-&gt;id ?&gt;"/&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+        &lt;ul&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="title"&gt;Article Title&lt;/label&gt;
+            &lt;input type="text" name="title" id="title" placeholder="Name of the article" required autofocus maxlength="255" value="&lt;?php echo htmlspecialchars( $results['article']-&gt;title )?&gt;" /&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="summary"&gt;Article Summary&lt;/label&gt;
+            &lt;textarea name="summary" id="summary" placeholder="Brief description of the article" required maxlength="1000" style="height: 5em;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;summary )?&gt;&lt;/textarea&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="content"&gt;Article Content&lt;/label&gt;
+            &lt;textarea name="content" id="content" placeholder="The HTML content of the article" required maxlength="100000" style="height: 30em;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;content )?&gt;&lt;/textarea&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="categoryId"&gt;Article Category&lt;/label&gt;
+            &lt;select name="categoryId"&gt;
+              &lt;option value="0"&lt;?php echo !$results['article']-&gt;categoryId ? " selected" : ""?&gt;&gt;(none)&lt;/option&gt;
+            &lt;?php foreach ( $results['categories'] as $category ) { ?&gt;
+              &lt;option value="&lt;?php echo $category-&gt;id?&gt;"&lt;?php echo ( $category-&gt;id == $results['article']-&gt;categoryId ) ? " selected" : ""?&gt;&gt;&lt;?php echo htmlspecialchars( $category-&gt;name )?&gt;&lt;/option&gt;
+            &lt;?php } ?&gt;
+            &lt;/select&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="publicationDate"&gt;Publication Date&lt;/label&gt;
+            &lt;input type="date" name="publicationDate" id="publicationDate" placeholder="YYYY-MM-DD" required maxlength="10" value="&lt;?php echo $results['article']-&gt;publicationDate ? date( "Y-m-d", $results['article']-&gt;publicationDate ) : "" ?&gt;" /&gt;
+          &lt;/li&gt;
+ 
+ 
+        &lt;/ul&gt;
+ 
+        &lt;div class="buttons"&gt;
+          &lt;input type="submit" name="saveChanges" value="Save Changes" /&gt;
+          &lt;input type="submit" formnovalidate name="cancel" value="Cancel" /&gt;
+        &lt;/div&gt;
+ 
+      &lt;/form&gt;
+ 
+&lt;?php if ( $results['article']-&gt;id ) { ?&gt;
+      &lt;p&gt;&lt;a href="admin.php?action=deleteArticle&amp;amp;articleId=&lt;?php echo $results['article']-&gt;id ?&gt;" onclick="return confirm('Delete This Article?')"&gt;Delete This Article&lt;/a&gt;&lt;/p&gt;
+&lt;?php } ?&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;</pre>
+</div>
+<p>Добавляем поле Article Category (категория статьи) к               форме. Оно представляет меню <code>select</code>, которое               содержит список всех категорий в базе данных, получаемый               из массива <code>$results['categories']</code>. Каждый               элемент <code>option</code> хранит ID категории в               атрибуте <code>value</code> и выводит название категории.               Если происходит редактирование существующей статьи, то код               выполняет проверку соответствия текущего ID категории               статьи и ID выбранной категории. Если они совпадают, то               добавляется атрибут <code>selected</code> для               предварительного выбора опции в списке.</p>
+<p>Элемент <code>select</code> также включает опцию "<em>(none)</em>"(нет               категории) вверху списка с нулевым значением. Таким               образом, администратор может создавать статьи, которые не               включены ни в какую категорию.</p>
+<h3>Редактируем заголовок страниц серверной части</h3>
+<p>Также нам нужно изменить заголовок, который выводится на               страницах серверной части. Пока он включает небольшое меню               ( Edit Articles (редактировать статьи) и Log Out(выход)).               Нам нужно добавить пункт Edit Categories (редактировать               категории), чтобы дать возможность администратору               просматривать, редактировать, добавлять и удалять               категории.</p>
+<p>В базовом варианте заголовок был встроен в каждый шаблон               серверной части (<code class="filename">listArticles.php</code> и <code class="filename">editArticle.php</code>). Вынесем               код заголовка в отдельный файл <code class="filename">header.php</code>.               Теперь изменения нужно будет вносить в одно место.</p>
+<p>Шаблоны <code class="filename">listArticles.php</code> и               <code class="filename">editArticle.php</code> уже изменены               для включения файла заголовка, а новые файлы&nbsp; <code class="filename">listCategories.php</code> и <code class="filename">editCategories.php</code> сразу               содержат правильный код.</p>
+<p>Итак, создаем папку <code class="filename">include</code> в каталоге <code class="filename">cms/templates/admin</code> и сохраняем следующий код в файле <code class="filename">header.php</code>,               который размещается в новой папке:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;div id="adminHeader"&gt;
+  &lt;h2&gt;Widget News Admin&lt;/h2&gt;
+  &lt;p&gt;You are logged in as &lt;b&gt;&lt;?php echo htmlspecialchars( $_SESSION['username']) ?&gt;&lt;/b&gt;. &lt;a href="admin.php?action=listArticles"&gt;Edit Articles&lt;/a&gt; &lt;a href="admin.php?action=listCategories"&gt;Edit Categories&lt;/a&gt; &lt;a href="admin.php?action=logout"?&gt;Log Out&lt;/a&gt;&lt;/p&gt;
+&lt;/div&gt;
+</pre>
+</div>
+<p>Код представляет разметку, которая ранее была встроена в               шаблоны <code class="filename">listArticles.php</code> и               <code class="filename">editArticle.php</code> с               добавлением новой опции "<em>Edit Categories</em>", которая               ссылается на <code class="filename">admin.php?action=listCategories</code>.</p>
+<p><img title="Выбор категории                 статьи" src="img_3.jpg" alt="Выбор категории статьи" /></p>
+
+
+ 
+    
+
+            
+    
+
+
+
+
+</body>
+</html>            
+   
+
+ 
+    
+

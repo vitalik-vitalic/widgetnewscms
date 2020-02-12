@@ -1,0 +1,1364 @@
+﻿<!DOCTYPE html>
+<html xmlns="//www.w3.org/1999/xhtml">
+<head>
+	
+ 
+</head>
+
+<body>
+<div id="body">
+ 
+    <div id="wrapper">
+    
+ 
+     
+    
+    <div id="lessons">
+        <h1 style="margin-top: 40px;">Строим свою CMS на PHP и MySQL.</h1>
+        <p>Задача построения системы управления содержанием (CMS) может       привести в замешательство новичка разработчика PHP. Но не так       страшен черт, как его малюют! В данной серии уроков мы построим       простую, но полностью работоспособную систему с нуля.</p>
+<p>В ходе процесса вы научитесь создавать базы и таблицы MySQL,       работать с объектами, константами, включениями, сессиями и прочими       инструментами PHP. Кроме того мы покажем, как отделять логику       приложения от презентации и сделать код PHP более безопасным. А       также вам откроется многое другое, полезное в деле создания       собственной системы мечты.</p>
+<p>Вы можете посмотреть работу готового приложения на странице       демонстрации (с целью безопасности включен режим "только чтение",       так что добавлять, изменять и удалять статьи не получится). Также       можно скачать полный код PHP нашей меленькой CMS с переведенными       комментариями.</p>
+
+<h2>Функционал нашей CMS</h2>
+<p>Первым делом надо точно определиться, что будет делать наша CMS.       Итак, вот список функций:</p>
+<p>Клиентская часть:</p>
+<ul>
+<li>Главная страница, на которой выводиться список последних 5         статей</li>
+<li>Страница со списком всех статей</li>
+<li>Страница просмотра отдельной статьи</li>
+</ul>
+<p>Серверная часть:</p>
+<ul>
+<li>Вход/выход для администратора </li>
+<li>Список всех статей</li>
+<li>Добавление новой статьи</li>
+<li>Редактирование существующей статьи </li>
+<li>Удаление существующей статьи</li>
+</ul>
+<p>Каждая статья имеет собственный заголовок, резюме и дату       публикации.</p>
+<p>&nbsp;</p>
+<h2>Планирование работ</h2>
+<p>Для создания нашей CMS нужно сделать следующие шаги</p>
+<ol>
+<li>Создать базу данных</li>
+<li>Создать таблицу <code>articles</code></li>
+<li>Сделать файл конфигурации</li>
+<li>Построить класс <code>Article</code> </li>
+<li>Написать скрипт клиентской части <code>index.php</code></li>
+<li>Написать скрипт серверной части <code>admin.php</code></li>
+<li>Создать шаблон клиентской части</li>
+<li>Создать шаблон серверной части</li>
+<li>Создать таблицу стилей и логотип системы</li>
+</ol>
+<p>&nbsp;</p>
+<h2>Шаг 1. Создаем базу данных</h2>
+<p>На первом шаге нужно создать базу данных MySQL для хранения       содержания. 
+<p class="infoBox">Для решения такой задачи также можно       воспользоваться инструментами для администрирования баз данных,       таким как phpMyAdmin. В некоторых случаях использование подобных       инструментов является единственным доступным для пользователя       инструментом для работы с базами данных (ситуация зависит от       правил, установленных на вашем хостинге).</p>
+<p class="infoBox">&nbsp;</p>
+<h2 class="infoBox">Шаг 2. Создаем таблицу <code>articles</code></h2>
+<p>Наша простая CMS имеет единственную таблицу в базе данных: <code>articles</code>.       В ней содержатся все статьи в нашей системе.</p>
+<p>Создадим схему таблицы. Схема таблицы описывает типы данных,       которые могут содержаться в таблице и информацию о ней.</p>
+<p>&nbsp;</p>
+<p>Создаем текстовой файл <code class="filename">tables.sql</code> на жестком диске и добавляем в него следующий код:</p>
+<div class="code_sample">
+<pre class="brush:sql">DROP TABLE IF EXISTS articles;
+CREATE TABLE articles
+(
+  id              smallint unsigned NOT NULL auto_increment,
+  publicationDate date NOT NULL,                              # Когда статья опубликована
+  title           varchar(255) NOT NULL,                      # Полный заголовок статьи
+  summary         text NOT NULL,                              # Резюме статьи
+  content         mediumtext NOT NULL,                        # HTML содержание статьи
+
+  PRIMARY KEY     (id)
+);
+</pre>
+</div>
+<p>Выше приведенный код определяет схему таблицы <code>articles</code>.       Он написан на SQL, языке для создания и манипулирования базами       данных в MySQL (и во многих других системах).</p>
+<p>Разберем выше приведенный код</p>
+<ol>
+<li> <strong>Создаем таблицу&nbsp;<code>articles</code> </strong> Выражение <code>DROP TABLE IF EXISTS articles</code> удаляет         любую существующую таблицу <code>articles</code>&nbsp; (вместе         с данным - осторожно!). Мы выполняем данную операцию чтобы в         базе не было двух таблиц с одинаковыми именами.          Выражение <code>CREATE TABLE articles ( )</code> создает новую         таблицу <code>articles</code>. Код, размещенный в скобках,         определяет структуру данных в таблице... </li>
+<li> <strong>Определяем для каждой статьи уникальный ID</strong> Теперь можно определять структуру таблицы. Таблица состоит из         набора полей (также их называют столбцами<dfn></dfn>). Каждое         поле содержит опредленный тип информации о статье.          Сначала мы создаем поле <code>id</code>. Оно имеет тип <code>smallint              unsigned</code> (без знаковое маленькое целое), то есть число         от 0 до 65,535. Таким образом, наша CMS может содержать до         65,535 статей. Также для него определяется атрибут <code>NOT           NULL</code>, который означает, что поле не может быть пустым         (null). Данное свойство существенно облегчает труд разработчика.         Добавляем атрибут <code>auto_increment</code>, который         указывает MySQL назначать новое, уникальное значение для поля <code>id</code> при создании записи. Итак, первая статья будет иметь <code>id</code>&nbsp;           1, вторая - <code>id</code>&nbsp; 2, и так далее. Мы будем         использовать уникальные значения как указатели на статью при         выводе и редактировании в CMS. </li>
+<li> <strong>Добавляем поле <code>publicationDate</code> </strong> Следующая строка создает поле <code>publicationDate</code>,         которое хранит дату публикации каждой статьи. Данное поле имеет         тип <code>date</code>, соответствующий значениям дат.</li>
+<li> <strong>Добавляем поле <code>title</code></strong> Теперь создаем поле <code>title</code>, в котором размещается         заголовок. Оно имеет тип <code>varchar(255)</code>, то есть         может хранить строку длиной до 255 символов.</li>
+<li> <strong>Добавляем поля <code>summary</code> и <code>content</code></strong> Последние два поля 2, <code>summary</code> и <code>content</code>,         содержат резюме статьи (краткое описание материала) и HTML         содержание соответственно. Резюме имеет тип <code>text</code> (то есть, может состоять из 65,535). А поле <code>content</code> имеет тип <code>mediumtext</code> (то есть может содержать до         16,777,215). </li>
+<li> <strong>Добавляем основной ключ</strong> Последняя строка в выражении <code>CREATE TABLE</code> определяет ключ для таблицы. Ключ также называют индексом, и он         служит для быстрого поиска данных в таблице за счет некоторого         увеличения требующегося пространства для хранения.          Мы определяем поле <code>id</code> как <code>PRIMARY KEY</code>.         Каждая таблица может содержать единственный <code>PRIMARY KEY</code>,         так как данный ключ уникально определяет каждую запись в         таблице. Кроме того, с помощью данного ключа MySQL очень быстро         находит нужную запись.</li>
+</ol>
+<p>Теперь у нас есть схема таблицы и ее нужно загрузить в MySQL для       создания структуры. Самый простой способ - открыть окно терминала,       перейти к папке с файлом <code class="filename">tables.sql</code> и запустить следующую команду:</p>
+<p><kbd>mysql -u <var>username</var> -p cms &lt; tables.sql</kbd></p>
+<p>...где <code><var>username</var></code> - имя пользователя       MySQL, а <code>cms</code> - имя базы данных, которую мы создали       на шаге 1.</p>
+<p>Вводите пароль пользователя после запроса, и MySQL загрузит и       выполнит код из файла <code class="filename">tables.sql</code>,       создав таблицу <code>articles</code> в базе данных <code>cms</code>.</p>
+<p class="infoBox">Также можно воспользоваться       инструментами для администрирования баз данных, таким как       phpMyAdmin, cPanel или Plesk (если они установлены на вашем       сервере).</p>
+<p class="infoBox">&nbsp;</p>
+<h2 class="infoBox">Шаг 3. Создаем файл конфигурации</h2>
+<p>Теперь&nbsp; у нас есть база данных и мы готовы разрабатывать код       PHP. Начнем с создания файла конфигурации для хранения различных       установок для нашей CMS. Данный файл будет использоваться       остальными скриптами нашей системы.</p>
+<p>Первым делом создаем папку <code class="filename">cms</code> в       папке веб сервера. Она будет содержать все файлы нашей CMS.</p>
+<p>В папке <code class="filename">cms</code> создаем файл <code class="filename">config.php</code> и копируем в него следующий       код:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ini_set( "display_errors", true );
+date_default_timezone_set( "Australia/Sydney" );  // http://www.php.net/manual/en/timezones.php
+define( "DB_DSN", "mysql:host=localhost;dbname=cms" );
+define( "DB_USERNAME", "username" );
+define( "DB_PASSWORD", "password" );
+define( "CLASS_PATH", "classes" );
+define( "TEMPLATE_PATH", "templates" );
+define( "HOMEPAGE_NUM_ARTICLES", 5 );
+define( "ADMIN_USERNAME", "admin" );
+define( "ADMIN_PASSWORD", "mypass" );
+require( CLASS_PATH . "/Article.php" );
+
+function handleException( $exception ) {
+  echo "Sorry, a problem occurred. Please try later.";
+  error_log( $exception-&gt;getMessage() );
+}
+
+set_exception_handler( 'handleException' );
+?&gt;
+</pre>
+</div>
+<p>Разберем код подробно:</p>
+<ol>
+<li> <strong>Выводим ошибки в браузере</strong> Строка <code>ini_set()</code> устанавливает режим вывода         сообщений об ошибках в браузере. Отличная опция для отладки         кода, но на готовом проекте данную опцию надо отключить (         установить значение <code>false</code>) для безопасности         ресурса. </li>
+<li> <strong>Устанавливаем временную зону</strong> Так как наша CMS будет использовать функцию PHP <code>date()</code>,         нужно указать временную зону сервера для PHP (иначе PHP будет         генерировать предупреждение). В примере установлена зона <code>"Australia/Sydney"</code> &mdash; <a href="http://www.php.net/manual/ru/timezones.php" target="_blank">поменяйте на           свою</a>. </li>
+<li> <strong>Устанавливаем детали доступа к базе данных</strong> Затем определяем константу <code>DB_DSN</code>, которая         указывает PHP, где искать базу данных MySQL. Параметр <code>dbname</code> должен соответствовать имени базы данных нашей CMS (<code>cms</code>).          Также мы будем хранить имя пользователя MySQL и пароль, которые         используются для доступа к базе данных CMS в константах <code>DB_USERNAME</code> и <code>DB_PASSWORD</code>. Установите правильные значения в         данных константах, которые соответствуют вашим настройкам. </li>
+<li> <strong>Устанавливаем пути</strong> Мы устанавливаем 2 пути в нашем файле конфигураций: <code>CLASS_PATH</code>,         который указывает на место хранения файлов классов, и <code>TEMPLATE_PATH</code>,         который указывает на место хранения шаблонов&nbsp; HTML. Оба         пути указываются относительно верхнего каталога <code class="filename">cms</code>. </li>
+<li> <strong>Устанавливаем количество статей, выводимых на           главной странице</strong> <code>HOMEPAGE_NUM_ARTICLES</code> управляет максимальным         количеством заголовков статей, которые выводятся на главной         странице. Мы установили 5, но можно легко увеличить или         уменьшить значение.</li>
+<li> <strong>Устанавливаем имя и пароль администратора</strong> Константы <code>ADMIN_USERNAME</code> и <code>ADMIN_PASSWORD</code> содержат данные регистрации для администратора нашей CMS. </li>
+<li> <strong>Включаем класс&nbsp;<code>Article</code></strong> Так как файл класса <code>Article</code> (мы его создадим         позже) требуется во всех скриптах нашего приложения, добавим его         здесь.</li>
+<li> <strong>Создаем обработчик исключительных ситуаций</strong> В завершение определяем <code>handleException()</code> -         простую функцию для обработки <a href="http://www.php.net/manual/ru/language.exceptions.php" target="_blank">исключений            PHP</a>, которые могут генерироваться при выполнении кода.         Данная функция выводит общее сообщение об ошибке и записывает         данные об ошибке в журнал веб сервера. Такая функция         способствует улучшению безопасности системы за счет обработки         исключений PDO, которые могут выводить имя пользователя и пароль         на странице. После определения функции <code>handleException()</code>,         мы устанавливаем ее как обработчик исключений PHP, вызывая         функцию <code>set_exception_handler()</code>.
+<p class="infoBox">Такой обработчик исключений сделан для           упрощения материалов урока. "Правильный" способ для обработки           исключений для перехвата всех вызовов PDO в&nbsp; <code class="filename">Article.php</code> заключается в           использовании <a href="http://www.php.net/manual/ru/language.exceptions.php" target="_blank">блоков              <code>try ... catch</code></a>.</p>
+</li>
+<h3>Замечание о безопасности</h3>
+<p>В реальных проектах лучше помещать <code class="filename">config.php</code> где-нибудь за пределами корневого каталога веб сайта, так как           в файле содержатся имена и пароли. Обычно код PHP невозможно           просмотреть в браузере, но иногда из-за неправильной           конфигурации веб сервера код становится доступным. Вы можете           использовать функцию <a href="http://www.php.net/manual/ru/function.hash.php" target="_blank"><code>hash()</code></a> для хэширования паролей и хранить в <code class="filename">config.php</code> хэши, вместо текстовых паролей. Затем при регистрации           пользователя можно опять воспользоваться функцией <code>hash()</code> для кодирования введенного пароля и сравнения результата с           сохраненным в&nbsp; <code class="filename">config.php</code> хэшем.</p>
+</ol>
+       <p><h2>Щаг 4. Создадим основной класс нашего приложения - <code>Article.</code></h2></p>
+<p>В нашей CMS&nbsp; <code>Article</code> будет единственным       классом PHP. Он будет обслуживать задачи сохранения статьи в базе       данных и получения материалов для вывода на страницах проекта. Как       только мы построим данный класс будет действительно легко создать       другие скрипты для создания, обновления, вывода и удаления статей.</p>
+<p>В нашей папке <code>cms</code> создаем каталог       <code>classes</code>. В папке <code>classes</code> создаем новый файл с именем <code>Article.php</code> и копируем в него следующий       код:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+
+/**
+ * Класс для обработки статей
+ */
+
+class Article
+{
+  // Свойства
+
+  /**
+  * @var int ID статей из базы данных
+  */
+  public $id = null;
+
+  /**
+  * @var int Дата первой публикации статьи
+  */
+  public $publicationDate = null;
+
+  /**
+  * @var string Полное название статьи
+  */
+  public $title = null;
+
+  /**
+  * @var string Краткое описание статьи
+  */
+  public $summary = null;
+
+  /**
+  * @var string HTML содержание статьи
+  */
+  public $content = null;
+
+
+  /**
+  * Устанавливаем свойства с помощью значений в заданном массиве
+  *
+  * @param assoc Значения свойств
+  */
+
+  public function __construct( $data=array() ) {
+    if ( isset( $data['id'] ) ) $this-&gt;id = (int) $data['id'];
+    if ( isset( $data['publicationDate'] ) ) $this-&gt;publicationDate = (int) $data['publicationDate'];
+    if ( isset( $data['title'] ) ) $this-&gt;title = preg_replace ( "/[^\.\,\-\_\'\"\@\?\!\:\$ a-zA-Z0-9()]/", "", $data['title'] );
+    if ( isset( $data['summary'] ) ) $this-&gt;summary = preg_replace ( "/[^\.\,\-\_\'\"\@\?\!\:\$ a-zA-Z0-9()]/", "", $data['summary'] );
+    if ( isset( $data['content'] ) ) $this-&gt;content = $data['content'];
+  }
+
+
+  /**
+  * Устанавливаем свойств с помощью значений формы редактирования записи в заданном массиве
+  *
+  * @param assoc Значения записи формы
+  */
+
+  public function storeFormValues ( $params ) {
+
+    // Сохраняем все параметры
+    $this-&gt;__construct( $params );
+
+    // Разбираем и сохраняем дату публикации
+    if ( isset($params['publicationDate']) ) {
+      $publicationDate = explode ( '-', $params['publicationDate'] );
+
+      if ( count($publicationDate) == 3 ) {
+        list ( $y, $m, $d ) = $publicationDate;
+        $this-&gt;publicationDate = mktime ( 0, 0, 0, $m, $d, $y );
+      }
+    }
+  }
+
+
+  /**
+  * Возвращаем объект статьи соответствующий заданному ID статьи
+  *
+  * @param int ID статьи
+  * @return Article|false Объект статьи или false, если запись не найдена или возникли проблемы
+  */
+
+  public static function getById( $id ) {
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) AS publicationDate FROM articles WHERE id = :id";
+    $st = $conn-&gt;prepare( $sql );
+    $st-&gt;bindValue( ":id", $id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $row = $st-&gt;fetch();
+    $conn = null;
+    if ( $row ) return new Article( $row );
+  }
+
+
+  /**
+  * Возвращает все (или диапазон) объектов статей в базе данных
+  *
+  * @param int Optional Количество строк (по умолчанию все)
+  * @param string Optional Столбец по которому производится сортировка  статей (по умолчанию "publicationDate DESC")
+  * @return Array|false Двух элементный массив: results =&gt; массив, список объектов статей; totalRows =&gt; общее количество статей
+  */
+
+  public static function getList( $numRows=1000000, $order="publicationDate DESC" ) {
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "SELECT SQL_CALC_FOUND_ROWS *, UNIX_TIMESTAMP(publicationDate) AS publicationDate FROM articles
+            ORDER BY " . mysql_escape_string($order) . " LIMIT :numRows";
+
+    $st = $conn-&gt;prepare( $sql );
+    $st-&gt;bindValue( ":numRows", $numRows, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $list = array();
+
+    while ( $row = $st-&gt;fetch() ) {
+      $article = new Article( $row );
+      $list[] = $article;
+    }
+
+    // Получаем общее количество статей, которые соответствуют критерию
+    $sql = "SELECT FOUND_ROWS() AS totalRows";
+    $totalRows = $conn-&gt;query( $sql )-&gt;fetch();
+    $conn = null;
+    return ( array ( "results" =&gt; $list, "totalRows" =&gt; $totalRows[0] ) );
+  }
+
+
+  /**
+  * Вставляем текущий объект статьи в базу данных, устанавливаем его свойства.
+  */
+
+  public function insert() {
+
+    // Есть у объекта статьи ID?
+    if ( !is_null( $this-&gt;id ) ) trigger_error ( "Article::insert(): Attempt to insert an Article object that already has its ID property set (to $this-&gt;id).", E_USER_ERROR );
+
+    // Вставляем статью
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "INSERT INTO articles ( publicationDate, title, summary, content ) VALUES ( FROM_UNIXTIME(:publicationDate), :title, :summary, :content )";
+    $st = $conn-&gt;prepare ( $sql );
+    $st-&gt;bindValue( ":publicationDate", $this-&gt;publicationDate, PDO::PARAM_INT );
+    $st-&gt;bindValue( ":title", $this-&gt;title, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":summary", $this-&gt;summary, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":content", $this-&gt;content, PDO::PARAM_STR );
+    $st-&gt;execute();
+    $this-&gt;id = $conn-&gt;lastInsertId();
+    $conn = null;
+  }
+
+
+  /**
+  * Обновляем текущий объект статьи в базе данных
+  */
+
+  public function update() {
+
+    // Есть ли у объекта статьи ID?
+    if ( is_null( $this-&gt;id ) ) trigger_error ( "Article::update(): Attempt to update an Article object that does not have its ID property set.", E_USER_ERROR );
+   
+    // Обновляем статью
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $sql = "UPDATE articles SET publicationDate=FROM_UNIXTIME(:publicationDate), title=:title, summary=:summary, content=:content WHERE id = :id";
+    $st = $conn-&gt;prepare ( $sql );
+    $st-&gt;bindValue( ":publicationDate", $this-&gt;publicationDate, PDO::PARAM_INT );
+    $st-&gt;bindValue( ":title", $this-&gt;title, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":summary", $this-&gt;summary, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":content", $this-&gt;content, PDO::PARAM_STR );
+    $st-&gt;bindValue( ":id", $this-&gt;id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $conn = null;
+  }
+
+
+  /**
+  * Удаляем текущий объект статьи из базы данных
+  */
+
+  public function delete() {
+
+    // Есть ли у объекта статьи ID?
+    if ( is_null( $this-&gt;id ) ) trigger_error ( "Article::delete(): Attempt to delete an Article object that does not have its ID property set.", E_USER_ERROR );
+
+    // Удаляем статью
+    $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+    $st = $conn-&gt;prepare ( "DELETE FROM articles WHERE id = :id LIMIT 1" );
+    $st-&gt;bindValue( ":id", $this-&gt;id, PDO::PARAM_INT );
+    $st-&gt;execute();
+    $conn = null;
+  }
+
+}
+
+?&gt;
+</pre>
+</div>
+<p>Файл получается достаточно длинным, но код очень простой.       Разберем его подробно:</p>
+<p>&nbsp;</p>
+<h2>1. Определение класса и его свойства</h2>
+<p>Сначала определим класс <code>Article:</code></p>
+<div class="code_sample">
+<pre class="brush:php">class Article
+{ 
+</pre>
+</div>
+<p>Все, что следует за данным строками до закрывающей фигурной       скобки в конце файла содержит код нашего класса&nbsp; <code>Article</code>.</p>
+<p>После определения класса мы объявляем свойства класса : <code>$id</code>,       <code>$publicationDate</code> и так далее. Каждый объект <code>Article</code>,       который мы создаем, будет хранить данные в объявленных свойствах.       Обратите внимание, что имена свойств соответствуют именам полей в       таблице <code>articles</code>.</p>
+<p>Технически, такой тип класса, который содержит свойства       соответствующие непосредственно полям базы данных и методы для       хранения и получения записей, соответствует шаблону       объектно-ориентированного проектирования, известному как&nbsp; <a href="http://ru.wikipedia.org/wiki/ActiveRecord" target="_blank">active         record</a>.</p>
+<p>&nbsp;</p>
+<h2>2. Конструктор</h2>
+<p>Затем мы создаем методы класса<dfn></dfn>. Это функции, которые       привязаны к классу и к объекту, создаваемому из класса. Наш       основной код вызывает методы для манипулирования данными в объекте       <code>Article</code>.</p>
+<p>Первый метод, <code>__construct()</code>, является       конструктором. Это специальный метод, который автоматически       вызывается системой PHP каждый раз, когда создается новый объект <code>Article</code>.       Наш конструктор получает необязательный массив <code>$data</code>,       в котором содержатся данные для свойств нового объекта. Затем мы       присваиваем данные свойствам в теле конструктора. Таким образом,       получается удобный способ для создания и инициализации объекта в       одно действие.</p>
+<p><code>$this-&gt;propertyName</code> означает:       "Свойство объекта <code>this</code> с именем "<code><var>$propertyName</var></code>".</p>
+<p>Обратите внимание, что метод фильтрует данные, прежде чем       присвоить их свойствам. Свойства <code>id</code> и <code>publicationDate</code> приводятся к типу <code>int</code> с помощью <code>(int)</code>,       так данные значения должны быть типа <code>int</code>. Свойства <code>title</code> и <code>summary</code> фильтруются с помощью регулярных       выражений, так как в них допускает наличие символов из       определенного набора. С точки зрения безопасности фильтрация       данных ввода - отличная практика. Пропускаем только допустимые       значения и символы.</p>
+<p>Однако, мы не фильтруем свойство <code>content</code>. Почему?       Вероятно, администратор захочет использовать более широкий       диапазон символов в содержании статьи - например, разметку HTML.       Если мы ограничим диапазон доступных символов в содержании, то       снизим полезность нашей системы для администратора.</p>
+<p>Обычно, такие места могут оказаться дырой в системе безопасности,       так как пользователь может вставить вредный код JavaScript или       материалы с ошибками в содержание статьи. Однако, так как мы       полагаем. что единственной персоной, которой доступно       редактирование содержание, будет администратор системы,       располагающий безграничным доверием, то вопрос с уязвимостью       содержания остается за рамками нашего внимания. Если вы имеете       дело с генерируем пользователями содержанием, например,       комментариями или записями форума, то следует быть более       осторожным и допускать только "безопасный" код HTML к       использованию. Отличным инструментом для решения таких задач       является&nbsp; <a href="http://htmlpurifier.org/" target="_blank">HTML         Purifier</a>, который анализирует ввод кода HTML и удаляет все       потенциальные угрозы.</p>
+<p>Безопасность кода PHP выходит за рамки наших уроков. Вам следует       посвятить определенное время для <a href="http://php.net/manual/ru/security.php" target="_blank">изучения данного         вопроса</a>.</p>
+<p>&nbsp;</p>
+<h2>3. <code>storeFormValues()</code></h2>
+<p>Следующий метод <code>storeFormValues()</code>похож на       конструктор в том, что он сохраняет полученный массив данных в       свойствах объекта. Основное отличие заключается в том, что <code>storeFormValues()</code> может обрабатывать данные в формате, который используется в формах       New Article (Новая статья) и Edit Article (Редактировать статью)       (мы создадим их позже). В частности, он может обрабатывать дату       публикации в формате&nbsp; <code>YYYY-MM-DD</code>,       конвертировать ее в формат времени UNIX, который отлично подходит       для хранения в объекте.</p>
+<p>Формат времени UNIX представляет собой целое значение, которое       содержит количество секунд от полуночи 1 января 1970 до искомой       даты. Датой в таком формате легко оперировать, и ее удобно       хранить.</p>
+<p>Назначение данного метода - облегчить реализацию скрипта для       хранения дат, вводимых в формах.</p>
+<p>Все члены (то есть свойства и методы) нашего класса <code>Article</code> имеют ключевое слово <code>public</code> перед определением, что       означает доступность кода вне класса. Также можно создавать       частные члены (директива <code>private</code>) (их можно       использовать только в классе) и защищенные члены (директива <code>protected</code>)       (которые можно использовать в классе и его подклассах).</p>
+<p>&nbsp;</p>
+<h2>4. <code>getById()</code></h2>
+<p>Теперь перейдем к методам, реализующим доступ к базе данных       MySQL. Первый из них - <code>getById()</code>. Он принимает в       качестве аргумента ID статьи&nbsp; (<code>$id</code>) и возвращает       запись с указанным ID из таблицы <code>articles</code>, сохраняя       данные в новом объекте <code>Article</code>.</p>
+<p>Обычно, когда вы вызываете метод, сначала нужно создать объект, а       затем вызвать метод, принадлежащий объекту. Но, так как&nbsp; <code>getById()</code> возвращает новый объект&nbsp; <code>Article</code>, будет полезно       вызывать его напрямую, а не через существующий объект. Иначе       придется создавать новый объект-заглушку каждый раз, когда нужно вызвать метод и получить статью.</p>
+<p>Для разрешения вызова метода без объекта&nbsp; мы добавляем       декларацию <a href="http://www.php.net/manual/ru/language.oop5.static.php" target="_blank"><code>static</code></a> к определению метода. Таким образом разрешается вызов метода       непосредственно без определения объекта.</p>
+<div class="code_sample">
+<pre class="brush:php">public static function getById( $id ) {
+</pre>
+</div>
+<p>Метод использует PDO для соединения с базой данных, получает       запись статьи с помощью запроса SQL <code>SELECT</code> и       сохраняет данные в новом объекте <code>Article</code>, который       возвращается в вызывающий код. <a href="http://www.php.net/manual/ru/book.pdo.php" target="_blank">PDO</a> &mdash; PHP       Data Objects &mdash;объектно-ориентированная библиотека, встроенная в       PHP, которая облегчает связь скриптов PHP с базами данных.</p>
+<p>Разберем метод подробнее:</p>
+<ol>
+<li>
+<p><strong>Соединение с базой данных</strong></p>
+<div>
+<div id="highlighter_893787" class="syntaxhighlighter php">
+<div class="code_sample">
+<pre class="brush:php">$conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
+</pre>
+</div>
+</div>
+</div>
+<p>Здесь выполняется соединение с базой данных MySQL с помощью           данных из файла <code>config.php</code>.           Дескриптор соединения сохраняется в переменной <code>$conn</code>.           Данный дескриптор используется в остальном коде для обмена           данных с базой.</p>
+</li>
+<li>
+<p><strong>Получаем запись статьи</strong></p>
+<div class="code_sample">
+<pre class="brush:php">$sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) AS publicationDate FROM articles WHERE id = :id";
+$st = $conn-&gt;prepare( $sql );
+$st-&gt;bindValue( ":id", $id, PDO::PARAM_INT );
+$st-&gt;execute();
+$row = $st-&gt;fetch();
+</pre>
+</div>
+<p>Выражение <code>SELECT</code> возвращает все поля (<code>*</code>)           из записи в таблице <code>articles</code>, которые           соответствуют заданному полю <code>id</code>. Значение поля <code>publicationDate</code> возвращается в формате времени UNIX, вместо формата для дат           MySQL, что упрощает процесс сохранения в нашем объекте.</p>
+<p>Вместо того, чтобы помещать наш параметр <code>$id</code> непосредственно в строку <code>SELECT</code>, что увеличивает           риск нарушения системы безопасности, мы используем <code>:id</code>.           Такой параметр известен как <dfn>placeholder (указатель места             размещения)</dfn>. Далее мы вызываем метод PDO для           привязывания значение <code>$id</code> к указателю места           размещения.</p>
+<p>Сразу после сохранения выражения <code>SELECT</code> в           строке, мы подготавливаем его с помощью функции <code>$conn-&gt;prepare()</code>,           сохраняя полученный дескриптор в переменной&nbsp; <code>$st</code>.</p>
+<p class="infoBox">Подготовка выражения используется для работы           со многими базами данных. Она позволяет выполнять запросы           быстрее и безопаснее.</p>
+<p>Затем мы привязываем значение переменной <code>$id</code> (           ID нужной статьи) к указателю места размещения <code>:id</code> с помощью вызова метода <code>bindValue()</code>.</p>
+<p>И вызываем метод <code>execute()</code> для выполнения           запроса. После чего используем метод <code>fetch()</code> для           перемещения полученной записи в ассоциированный массив с           именами полей и соответствующими значениями, который хранится           в переменной <code>$row</code>.</p>
+</li>
+<li>
+<p><strong>Закрываем соединение</strong></p>
+<div class="code_sample">
+<pre class="brush:php">$conn = null;
+</pre>
+</div>
+<p>Так как нам больше не нужно соединение, мы закрываем его,           присваивая значение <code>null</code> переменной <code>$conn</code>.           Закрывать соединение с базой данных как можно быстрее является           хорошей практикой для освобождения памяти на сервере.</p>
+</li>
+<li>
+<p><strong>Возвращаем объект <code>Article</code></strong></p>
+<div class="code_sample">
+<pre class="brush:php">if ( $row ) return new Article( $row );
+}
+</pre>
+</div>
+<p>Последним действием в нашем методе является создание           объекта&nbsp; <code>Article</code>, который будет содержать           запись из базы данных, и возвращение его вызывающему коду.           Сначала проверяем наличие данных в переменной<code> </code><code>$row</code> после вызова метода <code>fetch()</code>. Если данные есть,           создаем новый объект <code>Article</code> передавая           переменную ему <code>$row</code>. Будет вызван конструктор           класса, который наполнит объект данными из массива <code>$row</code>.           Затем возвращаем готовый объект и работа метода завершена.</p>
+</li>
+</ol>
+<p>&nbsp;</p>
+<h2>5. <code>getList()</code></h2>
+<p>Следующий метод <code>getList()</code> во многом похож на метод       <code>getById()</code>. Основное отличие заключается в том, что       метод <code>getList()</code> возвращает несколько статей сразу.       Его используют, когда нужно вывести список статей для пользователя       или администратора.</p>
+<p><code>getList()</code> принимает 2 аргумента:</p>
+<dl> <dt><code>$numRows</code></dt> <dd>Максимальное количество получаемых статей. По умолчанию         установлено значение 1,000,000 (то есть, практически все         статьи). Данный параметр позволяет нам получать только первые 5         статей для главной страницы.</dd> <dt><code>$order</code></dt> <dd>Порядок сортировки получаемых статей. По умолчанию         используется параметр <code>"publicationDate DESC"</code>,         который означает "сортировка по дате публикации, новые статьи         первые".</dd> </dl>
+<p>Большая часть кода метода похожа на код метода <code>getById()</code>.       Посмотрим на несколько строк:</p>
+<div class="code_sample">
+<pre class="brush:php">$sql = "SELECT SQL_CALC_FOUND_ROWS *, UNIX_TIMESTAMP(publicationDate) AS publicationDate FROM articles
+        ORDER BY " . mysql_escape_string($order) . " LIMIT :numRows";
+</pre>
+</div>
+<p>Здесь запрос немного сложнее. Обратите внимание, что здесь не       используется выражение <code>WHERE</code>, так как мы хотим       получить все статьи, а не одну с заданным ID.</p>
+<p>Также добавлено выражение <code>ORDER BY</code> для сортировки       возвращаемых записей в определенном порядке. Используется       выражение <code>LIMIT</code> с параметром <code>$numRows</code>&nbsp;       (как указатель места размещения) для ограничения количества       получаемых записей.</p>
+<p>Специальное значение MySQL <code>SQL_CALC_FOUND_ROWS</code> указывает базе данных, что нужно вернуть действительное количество       возвращаемых записей. Такая информация полезна для информирования       пользователя и организации других функций, например, постраничного       вывода списка.</p>
+<p>Вместо передачи значения переменной <code>$order</code> в запрос       через указатель места размещения, мы передаем его прямо в строку       запроса, вызывая функцию&nbsp; <code>mysql_escape_string()</code>,       чтобы отбросить любые специальные символы (для безопасности). Если       использовать указатель места размещения, то PDO поместит кавычки (<code>'</code>)       вокруг строки (например, <code>ORDER BY 'publicationDate DESC'</code>),       что является ошибкой синтаксиса.</p>
+<div class="code_sample">
+<pre class="brush:php">$list = array();
+ 
+while ( $row = $st-&gt;fetch() ) {
+  $article = new Article( $row );
+  $list[] = $article;
+}
+</pre>
+</div>
+<p>Так как мы возвращаем несколько строк, нужно создать массив <code>$list</code> для размещения соответствующих объектов <code>Article</code>.       Затем используем цикл <code>while</code> для получения следующей       строки через <code>fetch()</code>, создаем новый объект <code>Article</code>,       сохраняем строку в объекте и добавляем объект к массиву <code>$list</code>.       Когда строк не останется, метод <code>fetch()</code> вернет <code>false</code>,       и цикл остановится.</p>
+<div class="code_sample">
+<pre class="brush:php">// Теперь получаем общее число статей, которые соответствуют критерию
+$sql = "SELECT FOUND_ROWS() AS totalRows";
+$totalRows = $conn-&gt;query( $sql )-&gt;fetch();
+$conn = null;
+return ( array ( "results" =&gt; $list, "totalRows" =&gt; $totalRows[0] ) );
+</pre>
+</div>
+<p>В завершении мы выполняем запрос, который использует функцию <code>MySQL         FOUND_ROWS()</code> для получения количества возвращаемых строк,       вычисленного в предыдущей команде <code>SQL_CALC_FOUND_ROWS</code>.       В этот раз используем метод PDO <code>query()</code>, который       позволяет быстро выполнить запрос, если нет указателей места       замещения. Мы вызываем метод <code>fetch()</code> для получения       результата. Затем возвращаем оба значения - список объектов <code>Article</code> (<code>$list</code>) и общее количество строк - как       ассоциированный массив.</p>
+<p>&nbsp;</p>
+<h2>6. <code>insert()</code></h2>
+<p>Оставшиеся методы в нашем классе <code>Article</code> работают с       добавлением, изменением и удалением записей статей в базе данных.</p>
+<p><code>insert()</code> добавляет новую статью в таблицу <code>articles</code>,       используя значения из текущего объекта <code>Article</code>:</p>
+<ul>
+<li>Сначала метод проверяет, что объект не имеет установленного         свойства <code>$id</code>. Если у объекта есть ID, то,         вероятно, статья уже имеется в базе данных и ее добавлять не         нужно.</li>
+<li>Затем метод выполняет запрос SQL <code>INSERT</code> для         вставки записи в таблицу <code>articles</code>, используя         указатели места замещения для передачи значений свойств в базу         данных. Обратите внимание, что мы используем функцию MySQL <code>FROM_UNIXTIME()</code> для конвертации даты публикации в формат MySQL.</li>
+<li>После выполнения запроса, метод возвращает ID новой статьи с         помощью функции PDO <code>lastInsertId()</code> и сохраняет         значение в свойстве <code>$id</code>. Мы установили в таблице <code>articles</code> для поля <code>id</code> свойство <code>auto_increment</code>,         поэтому MySQL генерирует уникальное значение ID для каждой новой         записи.</li>
+</ul>
+<p>Обратите внимание, что мы используем <code>PDO::PARAM_INT</code> при привязке целых значений к указателям места замещения, и <code>PDO::PARAM_STR</code> при привязке строк. Таким образом, PDO может правильно       обрабатывать значения.</p>
+<p>&nbsp;</p>
+<h2>7. <code>update ()</code></h2>
+<p>Данный метод похож на метод <code>insert()</code>, за       исключением того, что здесь происходит обновление записи в базе       данных вместо создания новой записи.</p>
+<p>Сначала проверяем наличие ID у объекта, так как обновить можно       только запись с известным ID. Затем используем выражение SQL <code>UPDATE</code> для обновления полей записи. Обратите внимание на передачу ID       объекта в выражение <code>UPDATE</code>, так как мы знаем, какую       запись надо обновить.</p>
+<p>&nbsp;</p>
+<h2>8. <code>delete ()</code></h2>
+<p>Метод <code>delete()</code> использует выражение SQL <code>DELETE</code> для удаления из таблицы <code>articles</code> статьи, которая       хранится в объекте. Для идентификации записи задействуем       свойство <code>$id</code> объекта. Для безопасности мы добавили <code>LIMIT         1</code> к запросу, чтобы ограничиться удалением только одной       записи.</p>
+<p>&nbsp;</p>
+
+        <p><h2>Шаг 5. Создание скриптов,       управляющих серверной и клиентской частью приложения.</h2></p>
+<h2>1. Клиентская часть</h2>
+<p>Сначала создадим файл <code class="filename">index.php</code>,       который будет содержать скрипт клиентской части, то есть выводить       страницы в браузере пользователя. Копируем ниже приведенный код и       сохраняем файл в корневом каталоге нашей CMS <code class="filename">cms.</code></p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+ 
+require( "config.php" );
+$action = isset( $_GET['action'] ) ? $_GET['action'] : "";
+ 
+switch ( $action ) {
+  case 'archive':
+    archive();
+    break;
+  case 'viewArticle':
+    viewArticle();
+    break;
+  default:
+    homepage();
+}
+ 
+ 
+function archive() {
+  $results = array();
+  $data = Article::getList();
+  $results['articles'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $results['pageTitle'] = "Article Archive | Widget News";
+  require( TEMPLATE_PATH . "/archive.php" );
+}
+ 
+function viewArticle() {
+  if ( !isset($_GET["articleId"]) || !$_GET["articleId"] ) {
+    homepage();
+    return;
+  }
+ 
+  $results = array();
+  $results['article'] = Article::getById( (int)$_GET["articleId"] );
+  $results['pageTitle'] = $results['article']-&gt;title . " | Widget News";
+  require( TEMPLATE_PATH . "/viewArticle.php" );
+}
+ 
+function homepage() {
+  $results = array();
+  $data = Article::getList( HOMEPAGE_NUM_ARTICLES );
+  $results['articles'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $results['pageTitle'] = "Widget News";
+  require( TEMPLATE_PATH . "/homepage.php" );
+}
+ 
+?&gt;
+</pre>
+</div>
+<p>Разберем код скрипта подробно.</p>
+<ol>
+<li>
+<h3><strong>Включаем файл конфигурации</strong></h3>
+<p>Первая строка кода включает файл <code class="filename">config.php</code>,           и все установки приложения становятся доступны в скрипте. Мы           используем функцию <code>require()</code>, а не&nbsp; <code>include()</code>,           так как&nbsp; <code>require()</code> генерирует ошибку в           случае отсутствия подключаемого файла.</p>
+<p>&nbsp;</p>
+</li>
+<li>
+<h3><strong>Получаем параметр&nbsp;<code>action</code></strong></h3>
+<p>Сохраняем параметр <code>$_GET['action']</code> в           переменной <code>$action</code>, чтобы можно было           использовать значение далее в скрипте. Но прежде проверяем           наличие значения <code>$_GET['action']</code> с помощью           функции <code>isset()</code>. Если его нет, устанавливаем для           переменной <code>$action</code> пустую строку (<code>""</code>).</p>
+<p>Проверять значения, поставляемые пользователем ( такие как           строки, значения из форм, куки), на наличие перед           использованием - хорошая практика программирования.&nbsp; Так           не только ограничивается количество дырок в системе           безопасности, но и предотвращает вывод предупреждения           "undefined index" при выполнении скрипта.</p>
+</li>
+<li>
+<h3><strong>Определяем действие для выполнения</strong></h3>
+<p>Блок <code>switch</code> проверяет параметр <code>action</code> в URL для определения нужного действия (вывести архив,           просмотреть статью). Если параметр <code>action</code> отсутствует в URL, то скрипт выводит главную страницу.</p>
+</li>
+<li>
+<h3><strong><code>archive()</code></strong></h3>
+Данная функция выводит список всех статей в базе данных. Для         этого используется метод <code>getList()</code> класса <code>Article</code> . Функция сохраняет результат и заголовок страницы в         ассоциированном массиве<code> $results</code>, и шаблон может         вывести его на странице. В завершении включается шаблон для         вывода страницы. (Мы рассмотрим шаблоны в другом уроке нашей         серии.)</li>
+<li>
+<h3><strong><code>viewArticle()</code></strong></h3>
+<p>Данная функция выводит страницу одной статьи. Она получает ID           статьи для вывода из параметра URL <code>articleId</code>,           затем вызывает метод класса <code>Article</code>&nbsp; <code>getById()</code> для получения объекта статьи, который сохраняется в массиве <code>$results</code> для использования в шаблоне. (Если нет параметра <code>articleId</code> или статья не может быть найдена, то функция просто выводит           главную страницу.)</p>
+<p>Обратите внимание, что мы используем преобразование типов <code>(int)</code> для явного приведения параметра запроса <code>articleId </code>к           целому типу. Такое действие предотвращает передачу отличных от           чисел значений в наш код.</p>
+</li>
+<li>
+<h3><strong><code>homepage()</code></strong></h3>
+<p>Последняя функция <code>homepage()</code>выводит главную           страницу сайта, на которой содержится список из нескольких           статей, количество которых указано в параметре конфигурации <code>HOMEPAGE_NUM_ARTICLES</code>&nbsp;              (по умолчанию 5 ). Функция очень похожа на функцию <code>archive()&nbsp;</code> за исключением передачи параметра <code>HOMEPAGE_NUM_ARTICLES</code> методу <code>getList()</code> для ограничения количества           возвращаемых статей.</p>
+</li>
+</ol>
+<h2>2. Серверная часть</h2>
+<p>&nbsp;</p>
+<p>Скрипт серверной части несколько сложнее, чем <code class="filename">index.php</code>, так как в нем реализованы       функции администрирования для нашей CMS. Хотя основная структура       похожа на <code class="filename">index.php</code>.</p>
+<p>Создаем файл <code class="filename">admin.php</code> в том же       каталоге, что и файл <code class="filename">index.php</code>. И       копируем в него код:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php
+
+require( "config.php" );
+session_start();
+$action = isset( $_GET['action'] ) ? $_GET['action'] : "";
+$username = isset( $_SESSION['username'] ) ? $_SESSION['username'] : "";
+
+if ( $action != "login" &amp;&amp; $action != "logout" &amp;&amp; !$username ) {
+  login();
+  exit;
+}
+
+switch ( $action ) {
+  case 'login':
+    login();
+    break;
+  case 'logout':
+    logout();
+    break;
+  case 'newArticle':
+    newArticle();
+    break;
+  case 'editArticle':
+    editArticle();
+    break;
+  case 'deleteArticle':
+    deleteArticle();
+    break;
+  default:
+    listArticles();
+}
+
+
+function login() {
+
+  $results = array();
+  $results['pageTitle'] = "Admin Login | Widget News";
+
+  if ( isset( $_POST['login'] ) ) {
+
+    // Пользователь получает форму входа: попытка авторизировать пользователя
+
+    if ( $_POST['username'] == ADMIN_USERNAME &amp;&amp; $_POST['password'] == ADMIN_PASSWORD ) {
+
+      // Вход прошел успешно: создаем сессию и перенаправляем на страницу администратора
+      $_SESSION['username'] = ADMIN_USERNAME;
+      header( "Location: admin.php" );
+
+    } else {
+
+      // Ошибка входа: выводим сообщение об ошибке для пользователя
+      $results['errorMessage'] = "Incorrect username or password. Please try again.";
+      require( TEMPLATE_PATH . "/admin/loginForm.php" );
+    }
+
+  } else {
+
+    // Пользователь еще не получил форму: выводим форму
+    require( TEMPLATE_PATH . "/admin/loginForm.php" );
+  }
+
+}
+
+
+function logout() {
+  unset( $_SESSION['username'] );
+  header( "Location: admin.php" );
+}
+
+
+function newArticle() {
+
+  $results = array();
+  $results['pageTitle'] = "New Article";
+  $results['formAction'] = "newArticle";
+
+  if ( isset( $_POST['saveChanges'] ) ) {
+
+    // Пользователь получает форму редактирования статьи: сохраняем новую статью
+    $article = new Article;
+    $article-&gt;storeFormValues( $_POST );
+    $article-&gt;insert();
+    header( "Location: admin.php?status=changesSaved" );
+
+  } elseif ( isset( $_POST['cancel'] ) ) {
+
+    // Пользователь сбросил результаты редактирования: возвращаемся к списку статей
+    header( "Location: admin.php" );
+  } else {
+
+    // Пользователь еще не получил форму редактирования: выводим форму
+    $results['article'] = new Article;
+    require( TEMPLATE_PATH . "/admin/editArticle.php" );
+  }
+
+}
+
+
+function editArticle() {
+
+  $results = array();
+  $results['pageTitle'] = "Edit Article";
+  $results['formAction'] = "editArticle";
+
+  if ( isset( $_POST['saveChanges'] ) ) {
+
+    // Пользователь получил форму редактирования статьи: сохраняем изменения
+
+    if ( !$article = Article::getById( (int)$_POST['articleId'] ) ) {
+      header( "Location: admin.php?error=articleNotFound" );
+      return;
+    }
+
+    $article-&gt;storeFormValues( $_POST );
+    $article-&gt;update();
+    header( "Location: admin.php?status=changesSaved" );
+
+  } elseif ( isset( $_POST['cancel'] ) ) {
+
+    // Пользователь отказался от результатов редактирования: возвращаемся к списку статей
+    header( "Location: admin.php" );
+  } else {
+
+    // Пользвоатель еще не получил форму редактирования: выводим форму
+    $results['article'] = Article::getById( (int)$_GET['articleId'] );
+    require( TEMPLATE_PATH . "/admin/editArticle.php" );
+  }
+
+}
+
+
+function deleteArticle() {
+
+  if ( !$article = Article::getById( (int)$_GET['articleId'] ) ) {
+    header( "Location: admin.php?error=articleNotFound" );
+    return;
+  }
+
+  $article-&gt;delete();
+  header( "Location: admin.php?status=articleDeleted" );
+}
+
+
+function listArticles() {
+  $results = array();
+  $data = Article::getList();
+  $results['articles'] = $data['results'];
+  $results['totalRows'] = $data['totalRows'];
+  $results['pageTitle'] = "All Articles";
+
+  if ( isset( $_GET['error'] ) ) {
+    if ( $_GET['error'] == "articleNotFound" ) $results['errorMessage'] = "Error: Article not found.";
+  }
+
+  if ( isset( $_GET['status'] ) ) {
+    if ( $_GET['status'] == "changesSaved" ) $results['statusMessage'] = "Your changes have been saved.";
+    if ( $_GET['status'] == "articleDeleted" ) $results['statusMessage'] = "Article deleted.";
+  }
+
+  require( TEMPLATE_PATH . "/admin/listArticles.php" );
+}
+
+?&gt;
+</pre>
+</div>
+<p>Рассмотрим интересные места нашего скрипта:</p>
+<ol>
+<li>
+<h3><strong>Старт сессии пользователя</strong></h3>
+<p>В начале скрипта мы вызываем функцию <code>session_start()</code>.           Данная функция PHP запускает новую сессию пользователя,           которая позволяет нам контролировать регистрацию пользователя           в системе.&nbsp; Если сессия для пользователя уже имеется, то           PHP автоматически возобновит ее и будет использовать.</p>
+<p>Так как для сессии требуется работа с куки, и куки           пересылаются в браузер перед содержанием, то следует вызывать           <code>session_start()</code> в начале скрипта, до отправки           любого содержания.</p>
+</li>
+<li>
+<h3><strong>Получаем параметр <code>action</code> и переменную             сессии <code>username</code></strong></h3>
+<p>Затем мы сохраняем параметр<code> $_GET['action']</code> в           переменной <code>$action</code>, а переменную сессии <code>$_SESSION['username']</code> в <code>$username</code>, чтобы затем использовать данные           значения в скрипте. Перед сохранение осуществляем проверку с           помощью функции <code>isset()</code>. Если значение не           существует, устанавливаем в соответствующей переменной пустую           строку (<code>""</code>).</p>
+</li>
+<li>
+<h3><strong>Проверяем, зарегистрирован ли пользователь</strong></h3>
+<p>Нельзя позволять пользователю совершать какие-либо операции,           пока он не зарегистрируется как администратор. Поэтому нужно           проверить <code>$username</code> на наличие в сессии значения           для ключа <code>username</code>, который будет использоваться           для подтверждения регистрации пользователя. Если значение <code>$username</code> пустое, то показываем страницу регистрации и выходим           немедленно.</p>
+</li>
+<li>
+<h3><strong>Определяем действие для выполнения</strong></h3>
+<p>Блок <code>switch</code> работает так же как и в <code class="filename">index.php</code>: производится вызов           соответствующей функции на основании значения параметра URL <code>action</code>.           По умолчанию выводится список статей.</p>
+</li>
+<li>
+<h3><strong><code>login()</code></strong></h3>
+<p>Функция вызывается, когда нужно произвести регистрацию           пользователя в системе.</p>
+<p>Если пользователь отправил форму регистрации (что проверяется           по параметру формы <code>login</code> ), то функция           сопоставляет введенные имя и пароль со значениями параметров           конфигурации <code>ADMIN_USERNAME</code> и <code>ADMIN_PASSWORD</code>.           Если они соответствуют, то мы устанавливаем ключ сессии <code>username</code> в значение имени администратора, а затем перенаправляем           обратно скрипту <code class="filename">admin.php</code>,           который выводит список статей. Если пароль и имя пользователя           неверные, то будет выведена форма регистрации с сообщением об           ошибке.</p>
+<p>Если пользователь еще не отправил форму регистрации, то           просто выводим ее.</p>
+</li>
+<li>
+<h3><strong><code>logout()</code></strong></h3>
+<p>Данная функция вызывается, когда пользователь выходит из           системы. Здесь просто удаляется ключ сессии <code>username</code> и производится перенаправление обратно в <code class="filename">admin.php</code>.</p>
+</li>
+<li>
+<h3><strong><code>newArticle()</code></strong></h3>
+<p>Данная функция позволяет пользователю создавать новую статью.           Если пользователь уже отправил форму для новой статьи, то           функция создает новый объект <code>Article</code>, сохраняет           данные формы в объекте с помощью вызова функции <code>storeFormValues()</code>,           вставляет статью в базу данных с помощью функции <code>insert()</code> и перенаправляет обратно на список статей, выводя сообщение об           успешном завершении операции.</p>
+<p>Если пользователь не отправил форму для новой статьи, то           функция создает новый пустой объект&nbsp; <code>Article</code> без значений, затем использует шаблон <code class="filename">editArticle.php</code> для вывода формы редактирования статьи для только что           созданного объекта.</p>
+</li>
+<li>
+<h3><strong><code>editArticle()</code></strong></h3>
+<p>Данная функция похожа на <code>newArticle()</code>, за           исключением того, что пользователю предоставляется возможность           редактировать статью. Когда пользователь сохраняет изменения,           функция получает существующую статью с помощью <code>getById()</code>,           записывает новые значения в объекте <code>Article</code>,           затем сохраняет измененный объект с помощью функции <code>update()</code>.           (Если статья не найдена в базе данных, функция выведет           сообщение об ошибке.)</p>
+<p>Когда выводится форма редактирования статьи, функция           использует метод <code>getById()</code> для загрузки текущих           значений в поля формы.</p>
+<p>Скрипт использует один и тот же шаблон (<code class="filename">editArticle.php</code>) и для создания           новой статьи и для редактирования имеющейся. То есть нужно           создавать только одну форму HTML. Параметр <code>formAction</code> используется для определения операции со статьей.</p>
+</li>
+<li>
+<h3><strong><code>deleteArticle()</code></strong></h3>
+<p>Когда пользователь удаляет статью, данная функция сначала           получает ее (если статьи нет в базе данных, то выводится           сообщение об ошибке), а затем вызывает метод <code>delete()</code> для удаления данных из базы. После завершения операции функция           перенаправляет пользователя на страницу со списком статей и           выводит сообщение о удалении.</p>
+</li>
+<li>
+<h3><strong><code>listArticles()</code></strong></h3>
+<p>Последняя функция функция в скрипте <code class="filename">admin.php</code> выводит список статей в CMS. Используется метод&nbsp;<code>getList()</code> класса <code>Article </code>для получения всех статей. Затем           применяем шаблон <code class="filename">listArticles.php</code> для вывода списка. Кроме того, функция проверяет параметры           запроса URL <code>error</code> и <code>status</code>, чтобы           вывести сообщения об ошибке и состоянии системы, если нужно.</p>
+</li>
+</ol>
+        <p><h2>Шаг 6. Создадим визуальное  представление. Создадим шаблоны для клиентской части.</h2></p>
+<h2>1. Клиентская часть</h2>
+<h3>Файлы включения</h3>
+<p>Создаем папку с именем <code>templates</code> в       папке <code>cms</code> нашего проекта. Затем       создаем папку с именем <code>include</code> в       папке <code>templates</code>. В последней папке       мы поместим разметку для заголовка и нижнего колонтитула, которые       будут одинаковы для всех страниц сайта. Поэтому их можно включать       в каждый шаблон нашего проекта.</p>
+<p>Создаем файл с именем <code>header.php</code> в       папке <code>include</code> и копируем в него       следующий код:</p>
+<div class="code_sample">
+<pre class="brush:css">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+  &lt;head&gt;
+    &lt;title&gt;&lt;?php echo htmlspecialchars( $results['pageTitle'] )?&gt;&lt;/title&gt;
+    &lt;link rel="stylesheet" type="text/css" href="style.css" /&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;div id="container"&gt;
+ 
+      &lt;a href="."&gt;&lt;img id="logo" src="images/logo.jpg" alt="Widget News" /&gt;&lt;/a&gt;
+</pre>
+</div>
+<p>Данный код просто выводит разметку начала страницы HTML. Здесь       используется переменная <code>$results['pageTitle'],</code> передаваемая из основного скрипта (<code>index.php</code> или <code>admin.php</code>), для установки       элемента <code>title</code>, а также присоединяется таблица       стилей <code>style.css</code> (мы создадим ее       чуть позже).</p>
+<p><img title="Клиентская часть собственной CMS " src="lessons/les1590/img_1.jpg" alt="Клиентская часть собственной CMS " /></p>
+<p>Обратите внимание, что значение переменной <code>$results['pageTitle']</code> передается через функцию <a href="http://php.net/manual/ru/function.htmlspecialchars.php" target="_blank"><code>htmlspecialchars()</code></a>.       Данная функция кодирует любые специальные символы HTML (такие как       <code>&lt;</code>, <code>&gt;</code> или <code>&amp;</code>) в       эквиваленты (<code>&amp;lt;</code>, <code>&amp;gt;</code> и <code>&amp;amp;</code> соответственно). Вместе с фильтрацией ввода, которую мы разбирали       в предыдущих уроках серии при создании конструктора класса <code>Article</code> кодирование вывода является хорошей привычкой для повышения       безопасности сайта. Мы будем кодировать практически все данные в       нашем шаблоне подобным образом.</p>
+<p>Теперь создаем файл с именем <code>footer.php</code> в той же папке:</p>
+<div class="code_sample">
+<pre class="brush:css">      &lt;div id="footer"&gt;
+        Widget News &amp;copy; 2011. All rights reserved. &lt;a href="admin.php"&gt;Site Admin&lt;/a&gt;
+      &lt;/div&gt;
+ 
+    &lt;/div&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+<p>Данная разметка завершает каждую HTML страницу в нашей системе.</p>
+<p>&nbsp;</p>
+<h3><code>homepage.php</code></h3>
+<p>Вернемся в папку <code>templates</code> и       создадим в ней файл <code>homepage.php</code>, в       который копируем следующий код:</p>
+<div class="code_sample">
+<pre class="brush:css">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;ul id="headlines"&gt;
+ 
+&lt;?php foreach ( $results['articles'] as $article ) { ?&gt;
+ 
+        &lt;li&gt;
+          &lt;h2&gt;
+            &lt;span class="pubDate"&gt;&lt;?php echo date('j F', $article-&gt;publicationDate)?&gt;&lt;/span&gt;&lt;a href=".?action=viewArticle&amp;amp;articleId=&lt;?php echo $article-&gt;id?&gt;"&gt;&lt;?php echo htmlspecialchars( $article-&gt;title )?&gt;&lt;/a&gt;
+          &lt;/h2&gt;
+          &lt;p class="summary"&gt;&lt;?php echo htmlspecialchars( $article-&gt;summary )?&gt;&lt;/p&gt;
+        &lt;/li&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/ul&gt;
+ 
+      &lt;p&gt;&lt;a href="./?action=archive"&gt;Article Archive&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Данный шаблон выводит заголовки статей на главной странице в виде       неупорядоченного списка. Скрипт проходит циклом по массиву       объектов <code>Article</code>, который хранится в <code>$results['articles']</code>,       и выводит для каждой статьи дату публикации, название и резюме.       Название ссылается на <code>'.'</code> (<code>index.php</code>),        передавая параметр &nbsp;<code>action=viewArticle</code> вместе с       ID статьи в URL. Таким образом, пользователь может прочитать       статью, нажав на ссылку названия.</p>
+<p>Также шаблон включает ссылку на архив статей (<code>"./?action=archive"</code>).</p>
+<p>Обратите внимание, что данный шаблон, как и последующие,       использует директиву PHP <code>include</code> для включения       начала страницы и нижнего колонтитула.</p>
+<h3><code>archive.php</code></h3>
+<p>Теперь создаем файл <code>archive.php</code> в       каталоге <code>templates</code> и помещаем в       него код:</p>
+<div class="code_sample">
+<pre class="brush:css">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;h1&gt;Article Archive&lt;/h1&gt;
+ 
+      &lt;ul id="headlines" class="archive"&gt;
+ 
+&lt;?php foreach ( $results['articles'] as $article ) { ?&gt;
+ 
+        &lt;li&gt;
+          &lt;h2&gt;
+            &lt;span class="pubDate"&gt;&lt;?php echo date('j F Y', $article-&gt;publicationDate)?&gt;&lt;/span&gt;&lt;a href=".?action=viewArticle&amp;amp;articleId=&lt;?php echo $article-&gt;id?&gt;"&gt;&lt;?php echo htmlspecialchars( $article-&gt;title )?&gt;&lt;/a&gt;
+          &lt;/h2&gt;
+          &lt;p class="summary"&gt;&lt;?php echo htmlspecialchars( $article-&gt;summary )?&gt;&lt;/p&gt;
+        &lt;/li&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/ul&gt;
+ 
+      &lt;p&gt;&lt;?php echo $results['totalRows']?&gt; article&lt;?php echo ( $results['totalRows'] != 1 ) ? 's' : '' ?&gt; in total.&lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="./"&gt;Return to Homepage&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Данный шаблон выводит архив всех статей, которые имеются в нашей       CMS. Код практически идентичен <code>homepage.php</code>.       Здесь добавляется класс CSS <code>archive</code> для       неупорядоченного списка, чтобы мы могли формировать пункты списка       отличными от главной страницы. Также добавляем год в дату       публикации, так как архив может содержать данные за несколько лет.</p>
+<p>На странице также выводится общее число статей в базе данных,       которое мы получаем с помощью <code>$results['totalRows']</code>.       А вместо ссылки на архив выводится ссылка на главную страницу       "Return to Homepage".</p>
+<p>&nbsp;</p>
+<h3><code>viewArticle.php</code></h3>
+<p>Последний шаблон для клиентской части выводится статью для       пользователя. Создаем файл с именем <code>viewArticle.php</code> в папке <code>templates</code> folder и копируем       в него следующий код:</p>
+<div class="code_sample">
+<pre class="brush:css">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;h1 style="width: 75%;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;title )?&gt;&lt;/h1&gt;
+      &lt;div style="width: 75%; font-style: italic;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;summary )?&gt;&lt;/div&gt;
+      &lt;div style="width: 75%;"&gt;&lt;?php echo $results['article']-&gt;content?&gt;&lt;/div&gt;
+      &lt;p class="pubDate"&gt;Published on &lt;?php echo date('j F Y', $results['article']-&gt;publicationDate)?&gt;&lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="./"&gt;Return to Homepage&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Данный шаблон имеет достаточно простой код. Здесь выводится для       выбранной статьи название, резюме, содержание и дата публикации.       Кроме того на странице размещается ссылка для возвращения на       главную.</p>
+    
+        <p><h2>Шаг 7. Создание визуального представления серверной части CMS.</h2></p>
+
+<h3><code>loginForm.php</code></h3>
+<p>Создаем папку с именем <code>admin</code> в каталоге нашего       проекта&nbsp; <code>templates</code>. В папке <code>admin</code> создаем файл <code>loginForm.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;form action="admin.php?action=login" method="post" style="width: 50%;"&gt;
+        &lt;input type="hidden" name="login" value="true" /&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+        &lt;ul&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="username"&gt;Username&lt;/label&gt;
+            &lt;input type="text" name="username" id="username" placeholder="Your admin username" required autofocus maxlength="20" /&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="password"&gt;Password&lt;/label&gt;
+            &lt;input type="password" name="password" id="password" placeholder="Your admin password" required maxlength="20" /&gt;
+          &lt;/li&gt;
+ 
+        &lt;/ul&gt;
+ 
+        &lt;div class="buttons"&gt;
+          &lt;input type="submit" name="login" value="Login" /&gt;
+        &lt;/div&gt;
+ 
+      &lt;/form&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Эта страница содержит форму регистрации администратора, которая       отправлет к <code>admin.php?action=login</code>. Форма содержит       скрытое поле <code>login</code>, которое используетcя в функции <code>login()</code> для проверки факта отправки формы. Также здесь имеется область для       любых сообщений об ошибках (таких, как неправильное имя       пользователя или неправильный пароль) и поля для имени       пользователя и пароля, и кнопка отправки формы.</p>
+<p>Мы использовали некоторые атрибуты HTML5, такие как <code>placeholder</code>,       <code> required</code>, <code>autofocus</code> и <code>date</code> для полей в наших формах. Такие атрибуты делают формы более       удобными для использования, а также&nbsp; сохраняют возможность       для проверки необходимых значений в нашем коде PHP. Так как не все       браузеры сейчас поддерживают данные атрибуты HTML5, то вы, &nbsp; &nbsp; &nbsp; возможно, будете применять&nbsp; JavaScript и/или PHP функции для       проверки необходимых значений в серверной части.</p>
+<p>&nbsp;</p>
+<h3><code>listArticles.php</code></h3>
+<p>Сейчас создадим второй администраторский шаблон в вашей папке <code>admin</code>.       Он называется <code>listArticles.php</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;div id="adminHeader"&gt;
+        &lt;h2&gt;Widget News Admin&lt;/h2&gt;
+        &lt;p&gt;You are logged in as &lt;b&gt;&lt;?php echo htmlspecialchars( $_SESSION['username']) ?&gt;&lt;/b&gt;. &lt;a href="admin.php?action=logout"?&gt;Log out&lt;/a&gt;&lt;/p&gt;
+      &lt;/div&gt;
+ 
+      &lt;h1&gt;All Articles&lt;/h1&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+ 
+&lt;?php if ( isset( $results['statusMessage'] ) ) { ?&gt;
+        &lt;div class="statusMessage"&gt;&lt;?php echo $results['statusMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+      &lt;table&gt;
+        &lt;tr&gt;
+          &lt;th&gt;Publication Date&lt;/th&gt;
+          &lt;th&gt;Article&lt;/th&gt;
+        &lt;/tr&gt;
+ 
+&lt;?php foreach ( $results['articles'] as $article ) { ?&gt;
+ 
+        &lt;tr onclick="location='admin.php?action=editArticle&amp;amp;articleId=&lt;?php echo $article-&gt;id?&gt;'"&gt;
+          &lt;td&gt;&lt;?php echo date('j M Y', $article-&gt;publicationDate)?&gt;&lt;/td&gt;
+          &lt;td&gt;
+            &lt;?php echo $article-&gt;title?&gt;
+          &lt;/td&gt;
+        &lt;/tr&gt;
+ 
+&lt;?php } ?&gt;
+ 
+      &lt;/table&gt;
+ 
+      &lt;p&gt;&lt;?php echo $results['totalRows']?&gt; article&lt;?php echo ( $results['totalRows'] != 1 ) ? 's' : '' ?&gt; in total.&lt;/p&gt;
+ 
+      &lt;p&gt;&lt;a href="admin.php?action=newArticle"&gt;Add a New Article&lt;/a&gt;&lt;/p&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Этот шаблон выводит список статей для редактирования       администратором. После отображения любых сообщений об ошибке или       статусе мы проходим циклом по массиву объектов <code>Article</code>,       который содержится в <code>$results['articles']</code>, и выводим       на экран дату и название для каждой статьи в таблицу. К каждой       строке таблицы добавляем событие JavaScript <code>onclick</code>,       чтобы администратор мог щелчком мыши открыть статью для       редактирования.</p>
+<p>Шаблон также выводит общее количество всех статей и ссылку для       добавления нового материала.</p>
+<p>&nbsp;</p>
+<h3><code>editArticle.php</code></h3>
+<p>Теперь создадим последний шаблон для администраторской части <code>editArticle.php</code> в папке нашего проекта <code>admin</code>:</p>
+<div class="code_sample">
+<pre class="brush:php">&lt;?php include "templates/include/header.php" ?&gt;
+ 
+      &lt;div id="adminHeader"&gt;
+        &lt;h2&gt;Widget News Admin&lt;/h2&gt;
+        &lt;p&gt;You are logged in as &lt;b&gt;&lt;?php echo htmlspecialchars( $_SESSION['username']) ?&gt;&lt;/b&gt;. &lt;a href="admin.php?action=logout"?&gt;Log out&lt;/a&gt;&lt;/p&gt;
+      &lt;/div&gt;
+ 
+      &lt;h1&gt;&lt;?php echo $results['pageTitle']?&gt;&lt;/h1&gt;
+ 
+      &lt;form action="admin.php?action=&lt;?php echo $results['formAction']?&gt;" method="post"&gt;
+        &lt;input type="hidden" name="articleId" value="&lt;?php echo $results['article']-&gt;id ?&gt;"/&gt;
+ 
+&lt;?php if ( isset( $results['errorMessage'] ) ) { ?&gt;
+        &lt;div class="errorMessage"&gt;&lt;?php echo $results['errorMessage'] ?&gt;&lt;/div&gt;
+&lt;?php } ?&gt;
+ 
+        &lt;ul&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="title"&gt;Article Title&lt;/label&gt;
+            &lt;input type="text" name="title" id="title" placeholder="Name of the article" required autofocus maxlength="255" value="&lt;?php echo htmlspecialchars( $results['article']-&gt;title )?&gt;" /&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="summary"&gt;Article Summary&lt;/label&gt;
+            &lt;textarea name="summary" id="summary" placeholder="Brief description of the article" required maxlength="1000" style="height: 5em;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;summary )?&gt;&lt;/textarea&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="content"&gt;Article Content&lt;/label&gt;
+            &lt;textarea name="content" id="content" placeholder="The HTML content of the article" required maxlength="100000" style="height: 30em;"&gt;&lt;?php echo htmlspecialchars( $results['article']-&gt;content )?&gt;&lt;/textarea&gt;
+          &lt;/li&gt;
+ 
+          &lt;li&gt;
+            &lt;label for="publicationDate"&gt;Publication Date&lt;/label&gt;
+            &lt;input type="date" name="publicationDate" id="publicationDate" placeholder="YYYY-MM-DD" required maxlength="10" value="&lt;?php echo $results['article']-&gt;publicationDate ? date( "Y-m-d", $results['article']-&gt;publicationDate ) : "" ?&gt;" /&gt;
+          &lt;/li&gt;
+ 
+ 
+        &lt;/ul&gt;
+ 
+        &lt;div class="buttons"&gt;
+          &lt;input type="submit" name="saveChanges" value="Save Changes" /&gt;
+          &lt;input type="submit" formnovalidate name="cancel" value="Cancel" /&gt;
+        &lt;/div&gt;
+ 
+      &lt;/form&gt;
+ 
+&lt;?php if ( $results['article']-&gt;id ) { ?&gt;
+      &lt;p&gt;&lt;a href="admin.php?action=deleteArticle&amp;amp;articleId=&lt;?php echo $results['article']-&gt;id ?&gt;" onclick="return confirm('Delete This Article?')"&gt;Delete This Article&lt;/a&gt;&lt;/p&gt;
+&lt;?php } ?&gt;
+ 
+&lt;?php include "templates/include/footer.php" ?&gt;
+</pre>
+</div>
+<p>Здесь выводится форма редактирования, которая используется как       для создания новых статей, так и для редактирования существующих.       Она отправляет к <code>admin.php?action=newArticle</code>, или к       <code>admin.php?action=editArticle</code>, в зависимости от       значения переменной <code>$results['formAction']</code>. Шаблон       содержит также скрытое поле <code>articleId</code>, для       отслеживания ID редактируемой статьи (если он есть).</p>
+<p>Форма также имеет область для сообщений об ошибках, а также поля       для названия статьи, резюме, содержания и даты публикации. Здесь       также имеются 2 кнопки для сохранения и удаления изменений и       ссылка, позволяющая администратору удалить только что       отредактированную статью.</p>
+<p>Все данные передаются через функцию <code>htmlspecialchars()</code> до их вывода в разметке. Это не только хорошая привычка в плане       безопасности, но это также гарантирует, чтобы наши значения в       полях формы имели правильный формат. Например, когда значение поля       <code>title</code>, содержащего двойные кавычки ("), не проходит       такой обработки при размещении в коде, оно может быть обрезано,       так как двойные кавычки используются для разделения значения поля       и разметки.</p>
+<p>Обратите внимание, что мы используем атрибут HTML5 <code>formnovalidate</code> для кнопки <em>"Cancel"</em>. Данный атрибут указывает браузеру не       проводить проверку формы, если пользователь нажал кнопку <em>"Cancel"</em>.</p>
+<p>&nbsp;</p>
+<h2>Стили и логотип</h2>
+<p>Наша CMS практически готова, но для лучшего внешнего вида мы       создаем набор правил CSS и сохраняем их в файле <code class="filename">style.css</code> в папке <code class="filename">cms</code>:</p>
+<div class="code_sample">
+<pre class="brush:css">/* Стили для body and внешнего контейнера */
+
+body {
+  margin: 0;
+  color: #333;
+  background-color: #00a0b0;
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  line-height: 1.5em;
+}
+
+#container {
+  width: 960px;
+  background: #fff;
+  margin: 20px auto;
+  padding: 20px;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+}
+
+
+/* Логотип и нижний колонтитул */
+
+#logo {
+  display: block;
+  width: 300px;
+  padding: 0 660px 20px 0;
+  border: none;
+  border-bottom: 1px solid #00a0b0;
+  margin-bottom: 40px;
+}
+
+#footer {
+  border-top: 1px solid #00a0b0;
+  margin-top: 40px;
+  padding: 20px 0 0 0;
+  font-size: .8em;
+}
+
+
+/* Заголвки */
+
+h1 {
+  color: #eb6841;
+  margin-bottom: 30px;
+  line-height: 1.2em;
+}
+
+h2, h2 a {
+  color: #edc951;
+}
+
+h2 a {
+  text-decoration: none;
+}
+
+
+/* Заголовки статей */
+
+#headlines {
+  list-style: none;
+  padding-left: 0;
+  width: 75%;
+}
+
+#headlines li {
+  margin-bottom: 2em;
+}
+
+.pubDate {
+  font-size: .8em;
+  color: #eb6841;
+  text-transform: uppercase;
+}
+
+#headlines .pubDate {
+  display: inline-block;
+  width: 100px;
+  font-size: .5em;
+  vertical-align: middle;
+}
+
+#headlines.archive .pubDate {
+  width: 130px;
+}
+
+.summary {
+  padding-left: 100px;
+}
+
+#headlines.archive .summary {
+  padding-left: 130px;
+}
+
+
+/* Заголовок для страницы администратора */
+
+#adminHeader {
+  width: 940px;
+  padding: 0 10px;
+  border-bottom: 1px solid #00a0b0;
+  margin: -30px 0 40px 0;
+  font-size: 0.8em;
+}
+
+
+/* Стили для формы с цветным фоном, скругленными углами и тенью */
+
+form {
+  margin: 20px auto;
+  padding: 40px 20px;
+  overflow: auto;
+  background: #fff4cf;
+  border: 1px solid #666;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;  
+  border-radius: 5px;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+}
+
+
+/* Задаем для элементов формы согласованные поля, отступы, и высоту строки */
+
+form ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+form ul li {
+  margin: .9em 0 0 0;
+  padding: 0;
+}
+
+form * {
+  line-height: 1em;
+}
+
+
+/* Метки полей */
+
+label {
+  display: block;
+  float: left;
+  clear: left;
+  text-align: right;
+  width: 15%;
+  padding: .4em 0 0 0;
+  margin: .15em .5em 0 0;
+}
+
+
+/* Поля */
+
+input, select, textarea {
+  display: block;
+  margin: 0;
+  padding: .4em;
+  width: 80%;
+}
+
+input, textarea, .date {
+  border: 2px solid #666;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;    
+  border-radius: 5px;
+  background: #fff;
+}
+
+input {
+  font-size: .9em;
+}
+
+select {
+  padding: 0;
+  margin-bottom: 2.5em;
+  position: relative;
+  top: .7em;
+}
+
+textarea {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  font-size: .9em;
+  height: 5em;
+  line-height: 1.5em;
+}
+
+textarea#content {
+  font-family: "Courier New", courier, fixed;
+}
+  
+
+/* Рамка вокруг поля с фокусом ввода */
+
+form *:focus {
+  border: 2px solid #7c412b;
+  outline: none;
+}
+
+
+/* Правильно заполненное поле имеет зеленый фон */
+
+input:valid, textarea:valid {
+  background: #efe;
+}
+
+
+/* Кнопки отправки */
+
+.buttons {
+  text-align: center;
+  margin: 40px 0 0 0;
+}
+
+input[type="submit"] {
+  display: inline;
+  margin: 0 20px;
+  width: 12em;
+  padding: 10px;
+  border: 2px solid #7c412b;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;  
+  border-radius: 5px;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  color: #fff;
+  background: #ef7d50;
+  font-weight: bold;
+  -webkit-appearance: none;
+}
+
+input[type="submit"]:hover, input[type="submit"]:active {
+  cursor: pointer;
+  background: #fff;
+  color: #ef7d50;
+}
+
+input[type="submit"]:active {
+  background: #eee;
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8) inset;
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8) inset;
+  box-shadow: 0 0 .5em rgba(0, 0, 0, .8) inset;
+}
+
+
+/* Таблицы */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+tr, th, td {
+  padding: 10px;
+  margin: 0;
+  text-align: left;
+}
+
+table, th {
+  border: 1px solid #00a0b0;
+}
+
+th {
+  border-left: none;
+  border-right: none;
+  background: #ef7d50;
+  color: #fff;
+  cursor: default;
+}
+
+tr:nth-child(odd) {
+  background: #fff4cf;
+}
+
+tr:nth-child(even) {
+  background: #fff;
+}
+
+tr:hover {
+  background: #ddd;
+  cursor: pointer;
+}
+
+
+/* Окна для вывода статуса и сообщений об ошибках */
+
+.statusMessage, .errorMessage {
+  font-size: .8em;
+  padding: .5em;
+  margin: 2em 0;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  border-radius: 5px; 
+  -moz-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -webkit-box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+  -box-shadow: 0 0 .5em rgba(0, 0, 0, .8);
+}
+
+.statusMessage {
+  background-color: #2b2;
+  border: 1px solid #080;
+  color: #fff;
+}
+
+.errorMessage {
+  background-color: #f22;
+  border: 1px solid #800;
+  color: #fff;
+}
+</pre>
+</div>
+<p>Детального разбора кода CSS&nbsp; мы делать не будем, так как наши уроки       посвящены PHP и MySQL.</p>
+<p>А в папке <code class="filename">images</code> в каталоге нашего       проекта <code class="filename">cms</code> размещаем файл       изображения <code class="filename">logo.jpg</code> :</p>
+<p><img title="Логотип" src="lessons/les1591/img_2.jpg" alt="Логотип" width="300" height="99" /></p>
+
+
+</body>
+</html>            
+   
+
+ 
+    
+
