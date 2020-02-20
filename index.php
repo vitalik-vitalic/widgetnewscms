@@ -50,7 +50,7 @@ function homepage() {
   $data = Category::getList();
   $results['categories'] = array();
   foreach ( $data['results'] as $category ) $results['categories'][$category->id] = $category;
-  $results['pageTitle'] = "Widget News";
+  $results['pageTitle'] = "Widget News Message";
   require( TEMPLATE_PATH . "/homepage.php" );
 }
 
